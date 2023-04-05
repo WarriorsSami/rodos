@@ -10,12 +10,14 @@ mod domain;
 
 fn main() {
     // config
-    let config_str = std::fs::read_to_string("config.toml").expect("Unable to read config file");
-    let config: Config = toml::from_str(&config_str).expect("Unable to parse config string");
+    let config_res = std::fs::read_to_string("config.toml");
 
-    let config_arc: Arc<Mutex<Config>> = Arc::new(Mutex::new(
-        toml::from_str(&config_str).expect("Unable to parse config string"),
-    ));
+    let config: Config = match config_res {
+        Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
+        Err(..) => Config::default(),
+    };
+
+    let config_arc: Arc<Mutex<Config>> = Arc::new(Mutex::new(config.clone()));
     let mut mediator = DefaultMediator::builder()
         .add_handler(NeofetchHandler::new(config_arc))
         .build();
@@ -23,10 +25,11 @@ fn main() {
     // main loop
     loop {
         cprint!(
-            "<w!>{}</><b!>{}</><w!>{}</><g!>{}</> ",
+            "<w!>{}</><b!>{}</><w!>{}</><b!>{}</>/<b!>{}</> ",
             config.prompt.host,
             config.prompt.separator,
             config.prompt.user,
+            config.prompt.path_prefix,
             config.prompt.terminator
         );
         // Flush the buffer to print the prompt before reading the input

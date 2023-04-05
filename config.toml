@@ -8,4 +8,5 @@ cluster_count = 4096
 host = "rodos"
 separator = "@"
 user = "rouser"
+path_prefix = ":"
 terminator = "$"
