@@ -1,5 +1,7 @@
+use crate::domain::config::Config;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
+use std::sync::{Arc, Mutex};
 
 // NeofetchEvent is a request for retrieving specifications about the OS.
 pub(crate) struct NeofetchRequest;
@@ -7,25 +9,29 @@ pub(crate) struct NeofetchRequest;
 impl Request<bool> for NeofetchRequest {}
 
 // NeofetchHandler is a handler for NeofetchRequest.
-pub(crate) struct NeofetchHandler;
+pub(crate) struct NeofetchHandler {
+    pub(crate) config: Arc<Mutex<Config>>,
+}
 
 impl NeofetchHandler {
-    pub(crate) fn new() -> NeofetchHandler {
-        Self
+    pub(crate) fn new(config: Arc<Mutex<Config>>) -> NeofetchHandler {
+        NeofetchHandler { config }
     }
 }
 
 impl RequestHandler<NeofetchRequest, bool> for NeofetchHandler {
     fn handle(&mut self, _event: NeofetchRequest) -> bool {
+        let config = self.config.lock().unwrap();
+
         cprintln!("<bold>
-        <w!>WWWWWWWWWWWX</><c!>Okk0</><w!>XWWXXK</><c!>00000</><w!>KNWWWWWWWWWWW</>            <w!>rouser</><b!>@</><w!>rodos-rs</>
+        <w!>WWWWWWWWWWWX</><c!>Okk0</><w!>XWWXXK</><c!>00000</><w!>KNWWWWWWWWWWW</>            <w!>{}</><b!>{}</><w!>{}</>
         <w!>WWWWWWWN</><c!>0xlcok</><w!>XWWK</><c!>xooolllllodxO</><w!>KNWWWWWWW</>            <k!>----------------</>
-        <w!>WWWWWNkl</><b!>;,</><w!>o0NWWW</><c!>0ololllolllllllox0</><w!>NWWWWW</>            <r!>OS</>: <w!>RoDOS 0.1.0</>
-        <w!>WWWNOc</><b!>,':</><w!>kNWWWWN</><c!>xllllllokxlllloolld</><w!>KWWWW</>            <r>FAT</>: <w!>FAT32</>
-        <w!>WWXd;</><b!>,,</><w!>c0WWWWWWW</><c!>Oolllllx</><w!>XN00000000</><c!>Ok0</><w!>NWW</>            <r>Disk Size</>: <w!>1.0 GB</>
-        <w!>WXo</><b!>,,,:</><w!>0WWWWWWWWN</><c!>KOkkk</><w!>0NWKkdlcccloxOKNWW</>            <r>Disk Used</>: <w!>0.1 GB</>
-        <w!>Nd</><b!>,,,,</><w!>xWWWWWWWWWWWWWWWWNx:,'</><b!>,,,,,,',</><w!>ckNW</>            <r>Allocation Unit</>: <w!>4 KB</>
-        <w!>0:</><b!>',':</><w!>0</><c!>N</><w!>NWWWWWWWWWWWWWWk;'</><b!>,,,,</><w!>::</><b!>,,,,,,</><w!>oX</>
+        <w!>WWWWWNkl</><b!>;,</><w!>o0NWWW</><c!>0ololllolllllllox0</><w!>NWWWWW</>            <r!>OS</>: <w!>{} {}</>
+        <w!>WWWNOc</><b!>,':</><w!>kNWWWWN</><c!>xllllllokxlllloolld</><w!>KWWWW</>            <r>Author</>: <w!>{}</>
+        <w!>WWXd;</><b!>,,</><w!>c0WWWWWWW</><c!>Oolllllx</><w!>XN00000000</><c!>Ok0</><w!>NWW</>            <r>FAT</>: <w!>FAT{}</>
+        <w!>WXo</><b!>,,,:</><w!>0WWWWWWWWN</><c!>KOkkk</><w!>0NWKkdlcccloxOKNWW</>            <r>No Clusters</>: <w!>{}</>
+        <w!>Nd</><b!>,,,,</><w!>xWWWWWWWWWWWWWWWWNx:,'</><b!>,,,,,,',</><w!>ckNW</>            <r>Cluster Size</>: <w!>{} bytes</>
+        <w!>0:</><b!>',':</><w!>0</><c!>N</><w!>NWWWWWWWWWWWWWWk;'</><b!>,,,,</><w!>::</><b!>,,,,,,</><w!>oX</>            <r>Disk Size</>: <w!>{} bytes</>
         <w!>x</><b!>,,,'</>:<w!>0</><c!>KkX</><w!>WWWWWWWWWWWWWk</><b!>,,,,,,</><w!>dk:</><b!>',,,'</><w!>,x</>
         <w!>o</><b!>,,,'</><w!>;O</><c!>XddK</><w!>NWWWWWWWWW</><c!>WM</><w!>Xd</><b!>:,,;</><w!>lKKc'</><b!>,,,,</><w!>'o</>
         <w!>d</><b!>,,,,,</><w!>l</><c!>K0oox0</><w!>KXNWNNN</><c!>XX0O</><w!>00OO</><c!>OK</><w!>WO;'</><b!>,,,,,</><w!>o</>
@@ -38,7 +44,19 @@ impl RequestHandler<NeofetchRequest, bool> for NeofetchHandler {
         <w!>WWWWWWNOo</><b!>:,'',,,,,,,,,,,,,,,',</><w!>:oONWWWWWW</>
         <w!>WWWWWWWWWXOxoc;</><b!>,,,,,,,,,,;</><w!>coxOXWWWWWWWWW</>
         <w!>WWWWWWWWWWWWWX0kxdoooodxk0XWWWWWWWWWWWWW</>
-        </>");
+        </>",
+            config.prompt.host,
+            config.prompt.separator,
+            config.prompt.user,
+            config.os,
+            config.version,
+            config.author,
+            config.cluster_size,
+            config.cluster_count,
+            config.cluster_size,
+            config.cluster_size * config.cluster_count,
+        );
+
         true
     }
 }

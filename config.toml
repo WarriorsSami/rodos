@@ -1,0 +1,11 @@
+os = "RoDOS"
+version = "0.1.0"
+author = "Sami Barbut-Dica"
+cluster_size = 16
+cluster_count = 4096
+
+[prompt]
+host = "rodos"
+separator = "@"
+user = "rouser"
+terminator = "$"
