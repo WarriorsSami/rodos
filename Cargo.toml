@@ -8,3 +8,10 @@ edition = "2021"
 [dependencies]
 color-print = "0.3.4"
 colored = "2.0.0"
+mediator = "0.2.2"
+toml = "0.7.3"
+
+[config]
+os = "RoDOS"
+version = "0.1.0"
+author = "Sami Barbut-Dica"
