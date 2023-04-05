@@ -8,6 +8,7 @@ pub(crate) struct Config {
     pub(crate) prompt: Prompt,
     pub(crate) cluster_size: u32,
     pub(crate) cluster_count: u32,
+    pub(crate) storage_file_path: String,
 }
 
 impl Default for Config {
@@ -19,6 +20,7 @@ impl Default for Config {
             prompt: Prompt::default(),
             cluster_size: 16,
             cluster_count: 4096,
+            storage_file_path: "storage.bin".to_string(),
         }
     }
 }

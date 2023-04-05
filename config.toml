@@ -3,6 +3,7 @@ version = "0.1.0"
 author = "Sami Barbut-Dica"
 cluster_size = 16
 cluster_count = 4096
+storage_file_path = "storage.bin"
 
 [prompt]
 host = "rodos"

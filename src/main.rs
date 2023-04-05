@@ -1,5 +1,6 @@
 use crate::application::neofetch::{NeofetchHandler, NeofetchRequest};
 use crate::domain::config::Config;
+use crate::domain::disk::Disk;
 use color_print::*;
 use mediator::{DefaultMediator, Mediator};
 use std::io::Write;
@@ -16,6 +17,10 @@ fn main() {
         Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
         Err(..) => Config::default(),
     };
+
+    let mut disk = Disk::new(config.clone());
+    disk.sync_to_buffer();
+    disk.sync_to_file();
 
     let config_arc: Arc<Mutex<Config>> = Arc::new(Mutex::new(config.clone()));
     let mut mediator = DefaultMediator::builder()
