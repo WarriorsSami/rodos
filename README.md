@@ -30,7 +30,7 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     Free space: 1.5 MB 
     ```
     - compute by relating to allocated clusters
-  - **create** `file_name` `dimension/none` `alfa/num/stdin` - :
+  - **create** `file_name` `dimension/none` `alfa/num/stdin` - create a file:
     ```bash
     rouser@rodos:~$ create a.txt 20 alfa
     
