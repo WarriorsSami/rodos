@@ -11,4 +11,5 @@ colored = "2.0.0"
 lazy_static = "1.4.0"
 mediator = "0.2.2"
 serde = { version = "1.0.159", features = ["derive"] }
+tokio = { version = "1.27.0", features = ["full"] }
 toml = "0.7.3"

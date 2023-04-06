@@ -65,8 +65,8 @@ impl Disk {
                         let value: u16 = fat_value.clone().into();
 
                         // split the 2B fat value into 2 chunks of 1B
-                        chunk[0] = (value & 0x00FF) as u8;
-                        chunk[1] = ((value & 0xFF00) >> 8) as u8;
+                        chunk[0] = ((value & 0xFF00) >> 8) as u8;
+                        chunk[1] = (value & 0x00FF) as u8;
                     });
 
                 self.storage_buffer[cluster_index] = cluster;
@@ -77,7 +77,7 @@ impl Disk {
             .iter()
             .zip(self.storage_buffer.iter_mut().skip(self.fat.len()))
             .for_each(|(file_entry, cluster)| {
-                let file_entry_data: Vec<u8> = file_entry.clone().into();
+                let file_entry_data: ByteArray = file_entry.clone().into();
                 cluster[..file_entry_data.len()].clone_from_slice(&file_entry_data);
             });
     }

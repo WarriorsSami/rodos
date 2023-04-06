@@ -1,3 +1,5 @@
+use crate::domain::disk::ByteArray;
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FileEntry {
     pub(crate) name: String,
@@ -7,16 +9,16 @@ pub(crate) struct FileEntry {
     pub(crate) attributes: u8,
 }
 
-impl From<Vec<u8>> for FileEntry {
-    fn from(value: Vec<u8>) -> Self {
+impl From<ByteArray> for FileEntry {
+    fn from(value: ByteArray) -> Self {
         let mut name = String::new();
         let mut extension = String::new();
 
         (0..8).for_each(|i| name.push(value[i] as char));
         (8..11).for_each(|i| extension.push(value[i] as char));
 
-        let size = u16::from_le_bytes([value[13], value[12]]);
-        let first_cluster = u16::from_le_bytes([value[15], value[14]]);
+        let size = u16::from_be_bytes([value[12], value[13]]);
+        let first_cluster = u16::from_be_bytes([value[14], value[15]]);
         let attributes = value[16];
 
         Self {
@@ -29,8 +31,8 @@ impl From<Vec<u8>> for FileEntry {
     }
 }
 
-impl Into<Vec<u8>> for FileEntry {
-    fn into(self) -> Vec<u8> {
+impl Into<ByteArray> for FileEntry {
+    fn into(self) -> ByteArray {
         let mut result = Vec::new();
         result.resize(32, 0);
 
@@ -40,8 +42,8 @@ impl Into<Vec<u8>> for FileEntry {
         (0..8).for_each(|i| result[i] = name[i]);
         (8..11).for_each(|i| result[i] = extension[i - 8]);
 
-        let size = self.size.to_le_bytes();
-        let first_cluster = self.first_cluster.to_le_bytes();
+        let size = self.size.to_be_bytes();
+        let first_cluster = self.first_cluster.to_be_bytes();
 
         result[12] = size[0];
         result[13] = size[1];
