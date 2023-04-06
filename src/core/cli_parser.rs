@@ -22,14 +22,14 @@ impl CliParser {
                 .as_str()
                 .parse::<u32>()
                 .unwrap();
-            let file_type = captures
+            let content_type = captures
                 .name("type")
                 .unwrap()
                 .as_str()
                 .parse::<ContentType>()
                 .unwrap();
 
-            if file_type == ContentType::Unknown {
+            if content_type == ContentType::Unknown {
                 info!("Usage: {}", usage);
                 return Err(Box::try_from("Invalid content type!").unwrap());
             }
@@ -38,7 +38,7 @@ impl CliParser {
                 name.to_string(),
                 extension.to_string(),
                 dim,
-                file_type,
+                content_type,
             ))
         } else {
             info!("Usage: {}", usage);

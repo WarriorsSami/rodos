@@ -1,4 +1,19 @@
-use crate::domain::disk::ByteArray;
+use crate::domain::disk_manager::ByteArray;
+use std::ops::BitOr;
+
+pub(crate) enum FileEntryAttributes {
+    ReadOnly = 0x01,
+    Hidden = 0x02,
+    File = 0x04,
+}
+
+impl BitOr for FileEntryAttributes {
+    type Output = u8;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self as u8 | rhs as u8
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FileEntry {
@@ -34,22 +49,27 @@ impl From<ByteArray> for FileEntry {
 impl Into<ByteArray> for FileEntry {
     fn into(self) -> ByteArray {
         let mut result = Vec::new();
-        result.resize(32, 0);
+        result.resize(16, 0);
 
         let name = self.name.as_bytes();
         let extension = self.extension.as_bytes();
 
-        (0..8).for_each(|i| result[i] = name[i]);
-        (8..11).for_each(|i| result[i] = extension[i - 8]);
+        name.iter()
+            .enumerate()
+            .for_each(|(index, &value)| result[index] = value);
+        extension
+            .iter()
+            .enumerate()
+            .for_each(|(index, &value)| result[index + 8] = value);
 
         let size = self.size.to_be_bytes();
         let first_cluster = self.first_cluster.to_be_bytes();
 
-        result[12] = size[0];
-        result[13] = size[1];
-        result[14] = first_cluster[0];
-        result[15] = first_cluster[1];
-        result[16] = self.attributes;
+        result[11] = size[0];
+        result[12] = size[1];
+        result[13] = first_cluster[0];
+        result[14] = first_cluster[1];
+        result[15] = self.attributes;
 
         result
     }

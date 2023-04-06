@@ -23,6 +23,14 @@ macro_rules! error {
     };
 }
 
+// macro success! for printing success messages to stdout
+#[macro_export]
+macro_rules! success {
+    ($($arg:tt)+) => {
+        cprintln!("<g!>Success: {}</>", $($arg)+);
+    };
+}
+
 // macro warn! for printing warning messages to stdout
 #[macro_export]
 macro_rules! warn {
