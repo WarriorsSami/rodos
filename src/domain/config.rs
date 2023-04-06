@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Config {
@@ -6,6 +7,7 @@ pub(crate) struct Config {
     pub(crate) version: String,
     pub(crate) author: String,
     pub(crate) prompt: Prompt,
+    pub(crate) commands: Commands,
     pub(crate) cluster_size: u32,
     pub(crate) cluster_count: u32,
     pub(crate) storage_file_path: String,
@@ -13,11 +15,34 @@ pub(crate) struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        let mut commands = HashMap::new();
+
+        commands.insert(
+            "neofetch".to_string(),
+            Command {
+                name: "neofetch".to_string(),
+                description: "Display system information".to_string(),
+                usage: "neofetch".to_string(),
+                regex: r"\s*neofetch\s*".to_string(),
+            },
+        );
+
+        commands.insert(
+            "create".to_string(),
+            Command {
+                name: "create".to_string(),
+                description: "Create a new file".to_string(),
+                usage: "create <file_name>.<file_extension> <file_size> <file_content_type>".to_string(),
+                regex: r"\s*create\s+(?P<name>\S+)\.(?P<extension>\S+)\s+(?P<dim>\S+)\s+(?P<type>\S+)\s*".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),
             author: "Sami Barbut-Dica".to_string(),
             prompt: Prompt::default(),
+            commands,
             cluster_size: 16,
             cluster_count: 4096,
             storage_file_path: "storage.bin".to_string(),
@@ -45,3 +70,13 @@ impl Default for Prompt {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct Command {
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) usage: String,
+    pub(crate) regex: String,
+}
+
+pub(crate) type Commands = HashMap<String, Command>;
