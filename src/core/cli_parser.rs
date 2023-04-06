@@ -1,5 +1,5 @@
 use crate::application::create::CreateRequest;
-use crate::core::file_type::FileType;
+use crate::core::content_type::ContentType;
 use crate::{info, CONFIG};
 use color_print::cprintln;
 use std::error::Error;
@@ -26,12 +26,12 @@ impl CliParser {
                 .name("type")
                 .unwrap()
                 .as_str()
-                .parse::<FileType>()
+                .parse::<ContentType>()
                 .unwrap();
 
-            if file_type == FileType::Unknown {
+            if file_type == ContentType::Unknown {
                 info!("Usage: {}", usage);
-                return Err(Box::try_from("Invalid file type!").unwrap());
+                return Err(Box::try_from("Invalid content type!").unwrap());
             }
 
             Ok(CreateRequest::new(
