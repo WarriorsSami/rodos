@@ -18,9 +18,9 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     - setattr cannot modify the file/folder attribute
 - Commands:
   - **neofetch** - print system information
-  - **dir** - list files in current directory:
+  - **ls** - list files in current directory:
     ```bash
-    rouser@rodos:~$ dir
+    rouser@rodos:~$ ls
     
     Current directory: /
     a.txt 40 bytes
