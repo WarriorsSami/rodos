@@ -97,14 +97,13 @@ impl DiskManager {
 
     fn sync_to_buffer(&mut self) {
         // sync fat to storage buffer
+        let fat_clusters = 2 * self.fat.len() / self.cluster_size as usize;
         let fat_cells_per_cluster = self.cluster_size / 2;
+
         self.fat
             .chunks(fat_cells_per_cluster as usize)
-            .enumerate()
-            .for_each(|(cluster_index, fat_chunk)| {
-                let mut cluster = Vec::new();
-                cluster.resize(self.cluster_size as usize, 0);
-
+            .zip(self.storage_buffer.iter_mut().take(fat_clusters))
+            .for_each(|(fat_chunk, cluster)| {
                 fat_chunk
                     .iter()
                     .zip(cluster.chunks_mut(2))
@@ -115,12 +114,9 @@ impl DiskManager {
                         chunk[0] = ((value & 0xFF00) >> 8) as u8;
                         chunk[1] = (value & 0x00FF) as u8;
                     });
-
-                self.storage_buffer[cluster_index] = cluster;
             });
 
         // sync root to storage buffer
-        let fat_clusters = 2 * self.fat.len() / self.cluster_size as usize;
         self.root
             .iter()
             .zip(self.storage_buffer.iter_mut().skip(fat_clusters))
@@ -151,7 +147,7 @@ impl DiskManager {
         self.storage_buffer.iter_mut().for_each(|cluster| {
             storage_file
                 .read_exact(cluster)
-                .expect("Unable to read from storage file")
+                .expect("Unable to read from storage file");
         });
     }
 
@@ -254,7 +250,7 @@ impl IDiskManager for DiskManager {
             .iter()
             .filter(|&fat_value| *fat_value == FatValue::Free)
             .count()
-            == required_clusters
+            < required_clusters
         {
             return Err(Box::try_from("No space in fat".to_string()).unwrap());
         }
@@ -267,13 +263,13 @@ impl IDiskManager for DiskManager {
             .unwrap();
 
         // create file entry in root
-        let file_entry = FileEntry {
-            name: request.file_name,
-            extension: request.file_extension,
-            size: request.file_size,
-            first_cluster: first_cluster as u32,
-            attributes: FileEntryAttributes::File as u8,
-        };
+        let file_entry = FileEntry::new(
+            request.file_name,
+            request.file_extension,
+            request.file_size,
+            first_cluster as u32,
+            FileEntryAttributes::File as u8,
+        );
         let file_entry_index = self
             .root
             .iter()
@@ -291,8 +287,10 @@ impl IDiskManager for DiskManager {
             match self
                 .fat
                 .iter()
-                .position(|fat_value| *fat_value == FatValue::Free)
-            {
+                .enumerate()
+                .position(|(cluster_index, fat_value)| {
+                    *fat_value == FatValue::Free && cluster_index > current_cluster
+                }) {
                 Some(next_cluster) => {
                     self.fat[current_cluster] = FatValue::Data(next_cluster as u32);
 
@@ -305,20 +303,24 @@ impl IDiskManager for DiskManager {
                         )
                         .collect();
 
-                    current_cluster = next_cluster;
                     if remaining_file_size > self.cluster_size {
                         remaining_file_size -= self.cluster_size;
+                        current_cluster = next_cluster;
                     } else {
+                        // add the remaining padding as 0 at the end of the cluster
+                        self.storage_buffer[current_cluster].resize(self.cluster_size as usize, 0);
+                        self.fat[current_cluster] = FatValue::EndOfChain;
                         remaining_file_size = 0;
                     }
                 }
                 None => {
+                    // mark the current cluster as end of chain and free the chain cluster and the file entry
+                    self.fat[current_cluster] = FatValue::EndOfChain;
                     self.free_clusters_and_entry(&file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
             }
         }
-        self.fat[current_cluster] = FatValue::EndOfChain;
 
         // push sync
         self.push_sync();
