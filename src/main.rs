@@ -4,8 +4,8 @@ use crate::application::neofetch::{NeofetchHandler, NeofetchRequest};
 use crate::core::cli_parser::CliParser;
 use crate::core::Arm;
 use crate::domain::config::Config;
-use crate::domain::disk_manager::DiskManager;
 use crate::domain::i_disk_manager::IDiskManager;
+use crate::infrastructure::disk_manager::DiskManager;
 use color_print::*;
 use lazy_static::lazy_static;
 use mediator::{DefaultMediator, Mediator};
@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 mod application;
 mod core;
 mod domain;
+mod infrastructure;
 
 // config
 lazy_static! {

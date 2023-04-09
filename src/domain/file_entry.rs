@@ -1,4 +1,4 @@
-use crate::domain::disk_manager::ByteArray;
+use crate::infrastructure::disk_manager::ByteArray;
 use std::fmt::Display;
 use std::ops::BitOr;
 

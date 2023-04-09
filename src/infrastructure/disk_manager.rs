@@ -12,6 +12,44 @@ use std::io::{Read, Write};
 pub(crate) type ByteArray = Vec<u8>;
 pub(crate) type StorageBuffer = Vec<ByteArray>;
 
+/// The `DiskManager` is the main component of the application.
+///
+/// It is responsible for managing the storage buffer, the FAT table and the root table.
+///
+/// It is also responsible for the creation of files and directories.
+///
+/// It is the only component that can access the storage buffer.
+///
+/// # Fields
+/// **`fat`**:
+/// - The FAT table is a vector of FatValue.
+/// - The FatValue can be `Free`, `Reserved`, `EndOfChain`, 'Bad' or a cluster number.
+///
+/// **`root`**:
+/// - The root table is a vector of FileEntry.
+/// - The FileEntry can be a file or a directory.
+/// - The FileEntry contains the name, the extension, the size, the attributes and the cluster number.
+///
+/// **`working_directory`**:
+/// - The working directory is a string that represents the current directory.
+///
+/// **`cluster_size`**:
+/// - The cluster size is the size of a cluster in bytes.
+///
+/// **`cluster_count`**:
+/// - The cluster count is the number of clusters in the storage buffer.
+///
+/// **`storage_buffer`**:
+/// - The storage buffer is a vector of vectors of bytes.
+/// - The first vector represents the clusters.
+/// - The second vector represents the bytes of the cluster.
+///
+/// **`storage_file_path`**:
+/// - The storage file path is the path of the storage file.
+///
+/// The storage buffer is initialized with the content of the storage file.
+/// The FAT table is initialized with the content of the storage buffer.
+/// The root table is initialized with the content of the FAT table.
 #[derive(Debug, Clone)]
 pub(crate) struct DiskManager {
     fat: FatTable,
