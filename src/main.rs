@@ -32,7 +32,24 @@ lazy_static! {
     pub(crate) static ref CONFIG_ARC: Arm<Config> = Arc::new(Mutex::new(CONFIG.clone()));
     pub(crate) static ref DISK_ARC: Arm<dyn IDiskManager> = {
         let mut disk_manager = DiskManager::new(CONFIG_ARC.clone());
-        disk_manager.push_sync();
+
+        // if storage file doesn't exist, is empty or tampered, create new storage file based on in-memory config
+        // otherwise, init disk manager from storage file
+        let storage_file_exists = std::path::Path::new(&CONFIG.storage_file_path).exists();
+        if !storage_file_exists {
+            disk_manager.push_sync();
+        } else {
+            let storage_file_size = std::fs::metadata(&CONFIG.storage_file_path)
+                .expect("Unable to get storage file metadata")
+                .len();
+
+            if storage_file_size != disk_manager.get_total_space() {
+                disk_manager.push_sync();
+            } else {
+                disk_manager.pull_sync();
+            }
+        }
+
         Arc::new(Mutex::new(disk_manager))
     };
     pub(crate) static ref MEDIATOR: DefaultMediator = DefaultMediator::builder()
