@@ -5,6 +5,12 @@ use mediator::{Request, RequestHandler};
 
 pub(crate) struct ListRequest;
 
+impl ListRequest {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+}
+
 impl Request<Void> for ListRequest {}
 
 pub(crate) struct ListHandler {

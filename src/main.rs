@@ -1,6 +1,6 @@
 use crate::application::create::CreateHandler;
-use crate::application::ls::{ListHandler, ListRequest};
-use crate::application::neofetch::{NeofetchHandler, NeofetchRequest};
+use crate::application::ls::ListHandler;
+use crate::application::neofetch::NeofetchHandler;
 use crate::core::cli_parser::CliParser;
 use crate::core::Arm;
 use crate::domain::config::Config;
@@ -77,11 +77,16 @@ fn main() {
         }
 
         match command.unwrap() {
-            "neofetch" => {
-                if let Err(err) = mediator.send(NeofetchRequest) {
-                    error!(err);
+            "neofetch" => match CliParser::parse_neofetch(input.as_str()) {
+                Ok(request) => {
+                    if let Err(err) = mediator.send(request).unwrap() {
+                        error!(err);
+                    }
                 }
-            }
+                Err(err) => {
+                    warn!(err);
+                }
+            },
             "create" => match CliParser::parse_create(input.as_str()) {
                 Ok(request) => {
                     if let Err(err) = mediator.send(request).unwrap() {
@@ -94,11 +99,16 @@ fn main() {
                     warn!(err);
                 }
             },
-            "ls" => {
-                if let Err(err) = mediator.send(ListRequest).unwrap() {
+            "ls" => match CliParser::parse_ls(input.as_str()) {
+                Ok(request) => {
+                    if let Err(err) = mediator.send(request).unwrap() {
+                        warn!(err);
+                    }
+                }
+                Err(err) => {
                     warn!(err);
                 }
-            }
+            },
             "exit" => {
                 warn!("RoDOS is shutting down!");
                 break;

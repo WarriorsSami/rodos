@@ -17,16 +17,16 @@ terminator = "$"
     name = "neofetch"
     description = "Display system information"
     usage = "neofetch"
-    regex = "\\s*neofetch\\s*"
+    regex = "^\\s*neofetch\\s*$"
 
     [commands.create]
     name = "create"
     description = "Create a new file"
     usage = "create <file_name>.<file_extension> <file_size> <file_content_type>"
-    regex = "\\s*create\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s+(?P<dim>\\S+)\\s+(?P<type>\\S+)\\s*"
+    regex = "^\\s*create\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s+(?P<dim>\\d+)\\s+(?P<type>\\S+)\\s*$"
 
     [commands.ls]
     name = "ls"
-    description = "List files"
+    description = "List files and directories from the current directory"
     usage = "ls"
-    regex = "\\s*ls\\s*"
+    regex = "^\\s*ls\\s*$"

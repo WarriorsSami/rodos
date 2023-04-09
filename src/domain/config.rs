@@ -23,7 +23,7 @@ impl Default for Config {
                 name: "neofetch".to_string(),
                 description: "Display system information".to_string(),
                 usage: "neofetch".to_string(),
-                regex: r"\s*neofetch\s*".to_string(),
+                regex: r"^\s*neofetch\s*$".to_string(),
             },
         );
 
@@ -33,7 +33,17 @@ impl Default for Config {
                 name: "create".to_string(),
                 description: "Create a new file".to_string(),
                 usage: "create <file_name>.<file_extension> <file_size> <file_content_type>".to_string(),
-                regex: r"\s*create\s+(?P<name>\S+)\.(?P<extension>\S+)\s+(?P<dim>\S+)\s+(?P<type>\S+)\s*".to_string(),
+                regex: r"^\s*create\s+(?P<name>\S+)\.(?P<extension>\S+)\s+(?P<dim>\d+)\s+(?P<type>\S+)\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "ls".to_string(),
+            Command {
+                name: "ls".to_string(),
+                description: "List files and directories from the current directory".to_string(),
+                usage: "ls".to_string(),
+                regex: r"^\s*ls\s*$".to_string(),
             },
         );
 

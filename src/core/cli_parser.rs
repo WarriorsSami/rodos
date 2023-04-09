@@ -1,4 +1,6 @@
 use crate::application::create::CreateRequest;
+use crate::application::ls::ListRequest;
+use crate::application::neofetch::NeofetchRequest;
 use crate::core::content_type::ContentType;
 use crate::{info, CONFIG};
 use color_print::cprintln;
@@ -7,6 +9,19 @@ use std::error::Error;
 pub(crate) struct CliParser;
 
 impl CliParser {
+    pub(crate) fn parse_neofetch(input: &str) -> Result<NeofetchRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("neofetch").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("neofetch").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            Ok(NeofetchRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid neofetch command syntax!").unwrap())
+        }
+    }
+
     pub(crate) fn parse_create(input: &str) -> Result<CreateRequest, Box<dyn Error>> {
         let regex =
             regex::Regex::new(CONFIG.commands.get("create").unwrap().regex.as_str()).unwrap();
@@ -43,6 +58,18 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid create command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_ls(input: &str) -> Result<ListRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("ls").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("ls").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            Ok(ListRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid ls command syntax!").unwrap())
         }
     }
 }

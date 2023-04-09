@@ -7,6 +7,12 @@ use mediator::{Request, RequestHandler};
 // NeofetchEvent is a request for retrieving specifications about the OS.
 pub(crate) struct NeofetchRequest;
 
+impl NeofetchRequest {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+}
+
 impl Request<Void> for NeofetchRequest {}
 
 // NeofetchHandler is a handler for NeofetchRequest.
