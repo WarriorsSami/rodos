@@ -13,6 +13,18 @@ path_prefix = ":"
 terminator = "$"
 
 [commands]
+    [commands.help]
+    name = "help"
+    description = "Display the list of available commands"
+    usage = "help"
+    regex = "^\\s*help\\s*$"
+
+    [commands.exit]
+    name = "exit"
+    description = "Exit the shell"
+    usage = "exit"
+    regex = "^\\s*exit\\s*$"
+
     [commands.neofetch]
     name = "neofetch"
     description = "Display system information"

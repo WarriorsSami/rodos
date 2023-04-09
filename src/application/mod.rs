@@ -1,6 +1,7 @@
 use std::error::Error;
 
 pub(crate) mod create;
+pub(crate) mod help;
 pub(crate) mod ls;
 pub(crate) mod neofetch;
 pub(crate) mod rename;

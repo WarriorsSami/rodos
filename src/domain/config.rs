@@ -18,6 +18,26 @@ impl Default for Config {
         let mut commands = HashMap::new();
 
         commands.insert(
+            "help".to_string(),
+            Command {
+                name: "help".to_string(),
+                description: "Display the list of available commands".to_string(),
+                usage: "help".to_string(),
+                regex: r"^\s*help\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "exit".to_string(),
+            Command {
+                name: "exit".to_string(),
+                description: "Exit the shell".to_string(),
+                usage: "exit".to_string(),
+                regex: r"^\s*exit\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
             "neofetch".to_string(),
             Command {
                 name: "neofetch".to_string(),

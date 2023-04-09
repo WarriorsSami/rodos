@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
 use crate::application::neofetch::NeofetchRequest;
 use crate::application::rename::RenameRequest;
@@ -11,6 +12,30 @@ use std::error::Error;
 pub(crate) struct CliParser;
 
 impl CliParser {
+    pub(crate) fn parse_help(input: &str) -> Result<HelpRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("help").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("help").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            Ok(HelpRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid help command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_exit(input: &str) -> Void {
+        let regex = regex::Regex::new(CONFIG.commands.get("exit").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("exit").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            Ok(())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid exit command syntax!").unwrap())
+        }
+    }
+
     pub(crate) fn parse_neofetch(input: &str) -> Result<NeofetchRequest, Box<dyn Error>> {
         let regex =
             regex::Regex::new(CONFIG.commands.get("neofetch").unwrap().regex.as_str()).unwrap();

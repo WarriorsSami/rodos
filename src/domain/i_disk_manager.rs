@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::domain::file_entry::RootTable;
 use std::error::Error;
@@ -22,7 +23,8 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Arguments
     /// * `request` - The request containing the file parameters.
     /// ## Errors
-    /// * `Box<dyn Error>` - If the file already exists or there is not enough space in the disk.
+    /// * `Box<dyn Error>` - If the file already exists or there is not enough space in the disk or
+    /// a file with the same name already exists.
     fn create_file(&mut self, request: CreateRequest) -> Void;
 
     /// List all the files from the working directory

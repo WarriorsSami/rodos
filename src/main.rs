@@ -1,4 +1,5 @@
 use crate::application::create::CreateHandler;
+use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
 use crate::application::rename::RenameHandler;
@@ -54,6 +55,7 @@ lazy_static! {
         Arc::new(Mutex::new(disk_manager))
     };
     pub(crate) static ref MEDIATOR: DefaultMediator = DefaultMediator::builder()
+        .add_handler(HelpHandler::new(CONFIG_ARC.clone()))
         .add_handler(NeofetchHandler::new(CONFIG_ARC.clone()))
         .add_handler(CreateHandler::new(DISK_ARC.clone()))
         .add_handler(ListHandler::new(DISK_ARC.clone()))
@@ -111,10 +113,37 @@ fn main() {
                     warn!(err);
                 }
             },
-            "exit" => {
-                warn!("RoDOS is shutting down!");
-                break;
-            }
+            "rename" => match CliParser::parse_rename(input.as_str()) {
+                Ok(request) => {
+                    if let Err(err) = mediator.send(request).unwrap() {
+                        error!(err);
+                    } else {
+                        success!("File renamed successfully!");
+                    }
+                }
+                Err(err) => {
+                    warn!(err);
+                }
+            },
+            "help" => match CliParser::parse_help(input.as_str()) {
+                Ok(request) => {
+                    if let Err(err) = mediator.send(request).unwrap() {
+                        warn!(err);
+                    }
+                }
+                Err(err) => {
+                    warn!(err);
+                }
+            },
+            "exit" => match CliParser::parse_exit(input.as_str()) {
+                Ok(_) => {
+                    warn!("RoDOS is shutting down...");
+                    std::process::exit(0);
+                }
+                Err(err) => {
+                    warn!(err);
+                }
+            },
             _ => {
                 warn!("Command not found!");
             }
