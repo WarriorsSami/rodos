@@ -1,4 +1,5 @@
 use crate::domain::disk_manager::ByteArray;
+use std::fmt::Display;
 use std::ops::BitOr;
 
 pub(crate) enum FileEntryAttributes {
@@ -22,6 +23,16 @@ pub(crate) struct FileEntry {
     pub(crate) size: u32,
     pub(crate) first_cluster: u32,
     pub(crate) attributes: u8,
+}
+
+impl Display for FileEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} - {}.{} {} bytes",
+            self.attributes, self.name, self.extension, self.size
+        )
+    }
 }
 
 impl From<ByteArray> for FileEntry {

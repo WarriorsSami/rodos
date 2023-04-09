@@ -6,6 +6,7 @@ use crate::domain::config::Config;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
+use std::error::Error;
 use std::io::{Read, Write};
 
 pub(crate) type ByteArray = Vec<u8>;
@@ -13,13 +14,13 @@ pub(crate) type StorageBuffer = Vec<ByteArray>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DiskManager {
-    pub(crate) fat: FatTable,
-    pub(crate) root: RootTable,
-    pub(crate) current_dir: String,
-    pub(crate) cluster_size: u32,
-    pub(crate) cluster_count: u32,
-    pub(crate) storage_buffer: StorageBuffer,
-    pub(crate) storage_file_path: String,
+    fat: FatTable,
+    root: RootTable,
+    working_directory: String,
+    cluster_size: u32,
+    cluster_count: u32,
+    storage_buffer: StorageBuffer,
+    storage_file_path: String,
 }
 
 impl DiskManager {
@@ -48,7 +49,7 @@ impl DiskManager {
         Self {
             fat,
             root,
-            current_dir: "/".to_string(),
+            working_directory: "/".to_string(),
             cluster_size: config.cluster_size,
             cluster_count: config.cluster_count,
             storage_buffer,
@@ -285,5 +286,23 @@ impl IDiskManager for DiskManager {
         self.push_sync();
 
         Ok(())
+    }
+
+    fn list_files(&mut self) -> Result<RootTable, Box<dyn Error>> {
+        self.pull_sync();
+
+        // filter away empty entries
+        let root = self
+            .root
+            .iter()
+            .filter(|&file_entry| !file_entry.name.is_empty())
+            .cloned()
+            .collect();
+
+        Ok(root)
+    }
+
+    fn get_working_directory(&self) -> String {
+        self.working_directory.clone()
     }
 }

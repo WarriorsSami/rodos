@@ -1,4 +1,5 @@
 use crate::application::create::CreateHandler;
+use crate::application::ls::{ListHandler, ListRequest};
 use crate::application::neofetch::{NeofetchHandler, NeofetchRequest};
 use crate::core::cli_parser::CliParser;
 use crate::core::Arm;
@@ -36,6 +37,7 @@ lazy_static! {
     pub(crate) static ref MEDIATOR: DefaultMediator = DefaultMediator::builder()
         .add_handler(NeofetchHandler::new(CONFIG_ARC.clone()))
         .add_handler(CreateHandler::new(DISK_ARC.clone()))
+        .add_handler(ListHandler::new(DISK_ARC.clone()))
         .build();
 }
 
@@ -74,6 +76,11 @@ fn main() {
                     warn!(err);
                 }
             },
+            "ls" => {
+                if let Err(err) = mediator.send(ListRequest).unwrap() {
+                    warn!(err);
+                }
+            }
             "exit" => {
                 warn!("RoDOS is shutting down!");
                 break;
