@@ -32,4 +32,10 @@ pub(crate) trait IDiskManager: Sync + Send {
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;
+
+    /// Returns the free space in the disk with respect to the total number of empty clusters
+    fn get_free_space(&mut self) -> u64;
+
+    /// Returns the total space in the disk
+    fn get_total_space(&self) -> u64;
 }

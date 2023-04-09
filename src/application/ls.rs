@@ -31,6 +31,10 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                         println!("{}", file_entry);
                     });
 
+                    println!();
+                    println!("Free space: {} B", disk_manager.get_free_space());
+                    println!("Total space: {} B", disk_manager.get_total_space());
+
                     Ok(())
                 }
                 Err(e) => Err(e),

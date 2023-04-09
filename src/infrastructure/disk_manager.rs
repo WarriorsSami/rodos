@@ -343,4 +343,20 @@ impl IDiskManager for DiskManager {
     fn get_working_directory(&self) -> String {
         self.working_directory.clone()
     }
+
+    fn get_free_space(&mut self) -> u64 {
+        self.pull_sync();
+
+        let free_clusters = self
+            .fat
+            .iter()
+            .filter(|&fat_value| *fat_value == FatValue::Free)
+            .count();
+
+        (free_clusters * self.cluster_size as usize) as u64
+    }
+
+    fn get_total_space(&self) -> u64 {
+        (self.fat.len() * self.cluster_size as usize) as u64
+    }
 }

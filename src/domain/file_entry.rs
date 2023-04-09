@@ -2,6 +2,7 @@ use crate::infrastructure::disk_manager::ByteArray;
 use std::fmt::Display;
 use std::ops::BitOr;
 
+#[derive(Debug, Clone)]
 pub(crate) enum FileEntryAttributes {
     ReadOnly = 0x01,
     Hidden = 0x02,
@@ -25,12 +26,57 @@ pub(crate) struct FileEntry {
     pub(crate) attributes: u8,
 }
 
+impl FileEntry {
+    pub(crate) fn new(
+        name: String,
+        extension: String,
+        size: u32,
+        first_cluster: u32,
+        attributes: u8,
+    ) -> Self {
+        Self {
+            name,
+            extension,
+            size,
+            first_cluster,
+            attributes,
+        }
+    }
+
+    pub(crate) fn get_attributes_as_string(&self) -> String {
+        let mut result = String::new();
+
+        if self.attributes & FileEntryAttributes::File as u8 != 0 {
+            result.push('f');
+        } else {
+            result.push('d');
+        }
+
+        if self.attributes & FileEntryAttributes::ReadOnly as u8 != 0 {
+            result.push('r');
+        } else {
+            result.push('w');
+        }
+
+        if self.attributes & FileEntryAttributes::Hidden as u8 != 0 {
+            result.push('h');
+        } else {
+            result.push('v');
+        }
+
+        result
+    }
+}
+
 impl Display for FileEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} - {}.{} {} bytes",
-            self.attributes, self.name, self.extension, self.size
+            "{} - {}.{} {} B",
+            self.get_attributes_as_string(),
+            self.name,
+            self.extension,
+            self.size
         )
     }
 }
