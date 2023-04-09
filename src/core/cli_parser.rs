@@ -71,8 +71,19 @@ impl CliParser {
                 .parse::<ContentType>()
                 .unwrap();
 
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            if extension.len() > 3 {
+                return Err(Box::try_from("Extension must be 3 characters or less!").unwrap());
+            }
+
+            if dim > 10000 {
+                return Err(Box::try_from("Dimension must be 10000 or less!").unwrap());
+            }
+
             if content_type == ContentType::Unknown {
-                info!("Usage: {}", usage);
                 return Err(Box::try_from("Invalid content type!").unwrap());
             }
 
@@ -111,6 +122,22 @@ impl CliParser {
             let old_extension = captures.name("old_extension").unwrap().as_str();
             let new_name = captures.name("new_name").unwrap().as_str();
             let new_extension = captures.name("new_extension").unwrap().as_str();
+
+            if old_name.len() > 8 {
+                return Err(Box::try_from("Old name must be 8 characters or less!").unwrap());
+            }
+
+            if old_extension.len() > 3 {
+                return Err(Box::try_from("Old extension must be 3 characters or less!").unwrap());
+            }
+
+            if new_name.len() > 8 {
+                return Err(Box::try_from("New name must be 8 characters or less!").unwrap());
+            }
+
+            if new_extension.len() > 3 {
+                return Err(Box::try_from("New extension must be 3 characters or less!").unwrap());
+            }
 
             Ok(RenameRequest::new(
                 old_name.to_string(),
