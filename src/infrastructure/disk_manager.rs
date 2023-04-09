@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::content_type::ContentGenerator;
 use crate::core::Arm;
@@ -230,7 +231,11 @@ impl IDiskManager for DiskManager {
         if self.root.iter().any(|file_entry| {
             file_entry.name == request.file_name && file_entry.extension == request.file_extension
         }) {
-            return Err(Box::try_from("File already exists".to_string()).unwrap());
+            return Err(Box::try_from(format!(
+                "File {}.{} already exists",
+                request.file_name, request.file_extension
+            ))
+            .unwrap());
         }
 
         // check if there is enough space in root
@@ -340,6 +345,47 @@ impl IDiskManager for DiskManager {
             .collect();
 
         Ok(root)
+    }
+
+    fn rename_file(&mut self, request: RenameRequest) -> Void {
+        // check if the old file exists in root
+        if !self.root.iter().any(|file_entry| {
+            file_entry.name == request.old_name && file_entry.extension == request.old_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} does not exist",
+                request.old_name, request.old_extension
+            ))
+            .unwrap());
+        }
+
+        // check if a file with the new name already exists in root
+        if self.root.iter().any(|file_entry| {
+            file_entry.name == request.new_name && file_entry.extension == request.new_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} already exists",
+                request.new_name, request.new_extension
+            ))
+            .unwrap());
+        }
+
+        // rename the file in root
+        let file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| {
+                file_entry.name == request.old_name && file_entry.extension == request.old_extension
+            })
+            .unwrap();
+
+        self.root[file_entry_index].name = request.new_name;
+        self.root[file_entry_index].extension = request.new_extension;
+
+        // push sync
+        self.push_sync();
+
+        Ok(())
     }
 
     fn get_working_directory(&self) -> String {

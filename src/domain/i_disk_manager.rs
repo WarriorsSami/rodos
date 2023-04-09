@@ -30,6 +30,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// * `Box<dyn Error>` - If the disk manager is not able to sync with the storage file.
     fn list_files(&mut self) -> Result<RootTable, Box<dyn Error>>;
 
+    /// Renames a file with the given name.
+    /// ## Arguments
+    /// * `request` - The request containing the old and the new names.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the old file does not exist or a file with the same name as the new one already exists.
+    fn rename_file(&mut self, request: RenameRequest) -> Void;
+
     /// Returns the working directory
     fn get_working_directory(&self) -> String;
 

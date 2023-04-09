@@ -1,6 +1,7 @@
 use crate::application::create::CreateHandler;
 use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
+use crate::application::rename::RenameHandler;
 use crate::core::cli_parser::CliParser;
 use crate::core::Arm;
 use crate::domain::config::Config;
@@ -56,6 +57,7 @@ lazy_static! {
         .add_handler(NeofetchHandler::new(CONFIG_ARC.clone()))
         .add_handler(CreateHandler::new(DISK_ARC.clone()))
         .add_handler(ListHandler::new(DISK_ARC.clone()))
+        .add_handler(RenameHandler::new(DISK_ARC.clone()))
         .build();
 }
 

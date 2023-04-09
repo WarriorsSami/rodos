@@ -47,6 +47,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "rename".to_string(),
+            Command {
+                name: "rename".to_string(),
+                description: "Rename a file or a directory".to_string(),
+                usage: "rename <old_name> <new_name>".to_string(),
+                regex: r"^\s*rename\s+(?P<old_name>\S+)\.(?P<old_extension>\S+)\s+(?P<new_name>\S+)\.(?P<new_extension>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

@@ -1,6 +1,8 @@
 use crate::application::create::CreateRequest;
 use crate::application::ls::ListRequest;
 use crate::application::neofetch::NeofetchRequest;
+use crate::application::rename::RenameRequest;
+use crate::application::Void;
 use crate::core::content_type::ContentType;
 use crate::{info, CONFIG};
 use color_print::cprintln;
@@ -70,6 +72,30 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid ls command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_rename(input: &str) -> Result<RenameRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("rename").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("rename").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let old_name = captures.name("old_name").unwrap().as_str();
+            let old_extension = captures.name("old_extension").unwrap().as_str();
+            let new_name = captures.name("new_name").unwrap().as_str();
+            let new_extension = captures.name("new_extension").unwrap().as_str();
+
+            Ok(RenameRequest::new(
+                old_name.to_string(),
+                old_extension.to_string(),
+                new_name.to_string(),
+                new_extension.to_string(),
+            ))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid rename command syntax!").unwrap())
         }
     }
 }
