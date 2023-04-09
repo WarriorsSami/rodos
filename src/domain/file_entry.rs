@@ -29,12 +29,20 @@ impl From<ByteArray> for FileEntry {
         let mut name = String::new();
         let mut extension = String::new();
 
-        (0..8).for_each(|i| name.push(value[i] as char));
-        (8..11).for_each(|i| extension.push(value[i] as char));
+        (0..8).for_each(|i| {
+            if value[i] != 0x00 {
+                name.push(value[i] as char);
+            }
+        });
+        (8..11).for_each(|i| {
+            if value[i] != 0x00 {
+                extension.push(value[i] as char);
+            }
+        });
 
-        let size = u16::from_be_bytes([value[12], value[13]]);
-        let first_cluster = u16::from_be_bytes([value[14], value[15]]);
-        let attributes = value[16];
+        let size = u16::from_be_bytes([value[11], value[12]]);
+        let first_cluster = u16::from_be_bytes([value[13], value[14]]);
+        let attributes = value[15];
 
         Self {
             name,
@@ -62,8 +70,8 @@ impl Into<ByteArray> for FileEntry {
             .enumerate()
             .for_each(|(index, &value)| result[index + 8] = value);
 
-        let size = self.size.to_be_bytes();
-        let first_cluster = self.first_cluster.to_be_bytes();
+        let size = (self.size as u16).to_be_bytes();
+        let first_cluster = (self.first_cluster as u16).to_be_bytes();
 
         result[11] = size[0];
         result[12] = size[1];

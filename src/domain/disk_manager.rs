@@ -120,10 +120,12 @@ impl DiskManager {
         self.sync_from_file();
 
         // sync fat from storage buffer
+        let fat_clusters = 2 * self.fat.len() / self.cluster_size as usize;
         let fat_cells_per_cluster = self.cluster_size / 2;
+
         self.storage_buffer
             .iter()
-            .take(self.fat.len())
+            .take(fat_clusters)
             .enumerate()
             .for_each(|(cluster_index, cluster)| {
                 let fat_chunk = self
@@ -144,11 +146,18 @@ impl DiskManager {
         // sync root from storage buffer
         self.storage_buffer
             .iter()
-            .skip(self.fat.len())
+            .skip(fat_clusters)
             .zip(self.root.iter_mut())
             .for_each(|(cluster, file_entry)| {
                 let file_entry_data: ByteArray = file_entry.clone().into();
-                *file_entry = FileEntry::from(cluster[..file_entry_data.len()].to_vec());
+                let cluster_is_empty = cluster[..file_entry_data.len()]
+                    .iter()
+                    .all(|byte| *byte == 0);
+
+                *file_entry = match cluster_is_empty {
+                    false => FileEntry::from(cluster[..file_entry_data.len()].to_owned()),
+                    true => FileEntry::default(),
+                };
             });
     }
 
@@ -271,8 +280,6 @@ impl IDiskManager for DiskManager {
             }
         }
         self.fat[current_cluster] = FatValue::EndOfChain;
-
-        // println!("{:?}", self.fat);
 
         // push sync
         self.push_sync();
