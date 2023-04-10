@@ -12,7 +12,8 @@ root:
         - file_appender
 
 loggers:
-    log4rs:
+    rodos:
         level: info
         appenders:
         - file_appender
+        additive: false

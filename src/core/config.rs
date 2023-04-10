@@ -87,6 +87,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "cat".to_string(),
+            Command {
+                name: "cat".to_string(),
+                description: "Display the content of a file".to_string(),
+                usage: "cat <file_name>.<file_extension>".to_string(),
+                regex: r"^\s*cat\s+(?P<name>\S+)\.(?P<extension>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

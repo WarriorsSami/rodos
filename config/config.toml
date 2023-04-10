@@ -54,3 +54,9 @@ terminator = "$"
     description = "Delete a file or a directory"
     usage = "del <file_name>.<file_extension>"
     regex = "^\\s*del\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s*$"
+
+    [commands.cat]
+    name = "cat"
+    description = "Display the content of a file"
+    usage = "cat <file_name>.<file_extension>"
+    regex = "^\\s*cat\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s*$"

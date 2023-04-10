@@ -1,6 +1,7 @@
 use crate::application::Void;
 use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
+use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
 pub(crate) struct ListRequest;
@@ -30,9 +31,10 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
         match self.disk_manager.lock() {
             Ok(mut disk_manager) => match disk_manager.list_files() {
                 Ok(file_entries) => {
-                    println!(
-                        "Current directory: {}",
-                        disk_manager.get_working_directory()
+                    cprintln!(
+                        "<w!>Current dir `{}`</>: <b!>{} files</>",
+                        disk_manager.get_working_directory(),
+                        file_entries.len()
                     );
 
                     file_entries.iter().for_each(|file_entry| {
@@ -40,8 +42,8 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                     });
 
                     println!();
-                    println!("Free space: {} B", disk_manager.get_free_space());
-                    println!("Total space: {} B", disk_manager.get_total_space());
+                    cprintln!("<g!>Free space:</> {} B", disk_manager.get_free_space());
+                    cprintln!("<g!>Total space:</> {} B", disk_manager.get_total_space());
 
                     log::info!("Listed files successfully");
                     Ok(())

@@ -58,7 +58,7 @@ impl RequestHandler<CreateRequest, Void> for CreateHandler {
         );
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.create_file(request) {
+            Ok(mut disk_manager) => match disk_manager.create_file(&request) {
                 Ok(_) => {
                     log::info!("Created file successfully");
                     Ok(())

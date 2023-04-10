@@ -44,7 +44,7 @@ impl RequestHandler<RenameRequest, Void> for RenameHandler {
         log::info!("Renaming file...");
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.rename_file(request.clone()) {
+            Ok(mut disk_manager) => match disk_manager.rename_file(&request) {
                 Ok(_) => {
                     log::info!(
                         "File {}.{} renamed successfully to {}.{}!",

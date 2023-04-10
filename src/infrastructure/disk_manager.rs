@@ -1,3 +1,4 @@
+use crate::application::cat::CatRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
@@ -231,7 +232,7 @@ impl IDiskManager for DiskManager {
         self.sync_from_buffer();
     }
 
-    fn create_file(&mut self, request: CreateRequest) -> Void {
+    fn create_file(&mut self, request: &CreateRequest) -> Void {
         // check if file already exists in root
         if self.root.iter().any(|file_entry| {
             file_entry.name == request.file_name && file_entry.extension == request.file_extension
@@ -274,9 +275,9 @@ impl IDiskManager for DiskManager {
 
         // create file entry in root
         let file_entry = FileEntry::new(
-            request.file_name,
-            request.file_extension,
-            request.file_size,
+            request.file_name.to_owned(),
+            request.file_extension.to_owned(),
+            request.file_size.to_owned(),
             first_cluster as u32,
             FileEntryAttributes::File as u8,
         );
@@ -352,7 +353,7 @@ impl IDiskManager for DiskManager {
         Ok(root)
     }
 
-    fn rename_file(&mut self, request: RenameRequest) -> Void {
+    fn rename_file(&mut self, request: &RenameRequest) -> Void {
         // check if the old file exists in root
         if !self.root.iter().any(|file_entry| {
             file_entry.name == request.old_name && file_entry.extension == request.old_extension
@@ -384,8 +385,8 @@ impl IDiskManager for DiskManager {
             })
             .unwrap();
 
-        self.root[file_entry_index].name = request.new_name;
-        self.root[file_entry_index].extension = request.new_extension;
+        self.root[file_entry_index].name = request.new_name.to_owned();
+        self.root[file_entry_index].extension = request.new_extension.to_owned();
 
         // push sync
         self.push_sync();
@@ -393,7 +394,7 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    fn delete_file(&mut self, request: DeleteRequest) -> Void {
+    fn delete_file(&mut self, request: &DeleteRequest) -> Void {
         // check if the file exists in root
         if !self.root.iter().any(|file_entry| {
             file_entry.name == request.file_name && file_entry.extension == request.file_extension
@@ -422,6 +423,47 @@ impl IDiskManager for DiskManager {
         self.push_sync();
 
         Ok(())
+    }
+
+    fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>> {
+        // pull sync
+        self.pull_sync();
+
+        // check if the file exists in root
+        if !self.root.iter().any(|file_entry| {
+            file_entry.name == request.file_name && file_entry.extension == request.file_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} does not exist",
+                request.file_name, request.file_extension
+            ))
+            .unwrap());
+        }
+
+        // get the file entry
+        let file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| {
+                file_entry.name == request.file_name
+                    && file_entry.extension == request.file_extension
+            })
+            .unwrap_or_default();
+
+        // iterate through the cluster chain and read the file content from the storage buffer
+        let mut content = String::new();
+        let mut current_cluster = self.root[file_entry_index].first_cluster as usize;
+
+        while self.fat[current_cluster] != FatValue::EndOfChain {
+            content.push_str(&String::from_utf8_lossy(
+                &self.storage_buffer[current_cluster][..self.cluster_size as usize],
+            ));
+
+            let next_cluster_index: u16 = self.fat[current_cluster].clone().into();
+            current_cluster = next_cluster_index as usize;
+        }
+
+        Ok(content)
     }
 
     fn get_working_directory(&self) -> String {

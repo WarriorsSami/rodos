@@ -1,3 +1,4 @@
+use crate::application::cat::CatHandler;
 use crate::application::create::CreateHandler;
 use crate::application::del::DeleteHandler;
 use crate::application::help::HelpHandler;
@@ -9,10 +10,10 @@ use crate::core::config::Config;
 use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use crate::infrastructure::disk_manager::DiskManager;
-use color_print::*;
+use color_print::{cprint, cprintln};
 use lazy_static::lazy_static;
 use log4rs::append::file::FileAppender;
-use log4rs::config::{Appender, Root};
+use log4rs::config::{Appender, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use mediator::{DefaultMediator, Mediator};
 use std::io::Write;
@@ -65,32 +66,12 @@ lazy_static! {
         .add_handler(ListHandler::new(DISK_ARC.clone()))
         .add_handler(RenameHandler::new(DISK_ARC.clone()))
         .add_handler(DeleteHandler::new(DISK_ARC.clone()))
+        .add_handler(CatHandler::new(DISK_ARC.clone()))
         .build();
 }
 
 fn main() {
-    match log4rs::init_file("config/log4rs.yaml", Default::default()) {
-        Ok(_) => {}
-        Err(_) => {
-            let file_appender = FileAppender::builder()
-                .encoder(Box::new(PatternEncoder::new(
-                    "{d(%Y-%m-%d %H:%M:%S%.3f)} {h({l})} {M} - {m}{n}",
-                )))
-                .build("logs/rodos.logs")
-                .unwrap();
-
-            let log_config = log4rs::config::Config::builder()
-                .appender(Appender::builder().build("file_appender", Box::new(file_appender)))
-                .build(
-                    Root::builder()
-                        .appender("file_appender")
-                        .build(log::LevelFilter::Info),
-                )
-                .unwrap();
-
-            log4rs::init_config(log_config).unwrap();
-        }
-    }
+    init_logger();
     let mut mediator = MEDIATOR.clone();
 
     log::info!("RoDOS is booting up...");
@@ -135,6 +116,7 @@ fn main() {
                 input.as_str(),
                 "File deleted successfully!"
             ),
+            "cat" => handle!(mediator, parse_cat, input.as_str()),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => match CliParser::parse_exit(input.as_str()) {
                 Ok(_) => {
@@ -145,12 +127,43 @@ fn main() {
                 }
                 Err(err) => {
                     warn!(err);
-                    log::error!("{}", err);
+                    log::warn!("{}", err);
                 }
             },
             _ => {
                 warn!("Command not found!");
             }
+        }
+    }
+}
+
+fn init_logger() {
+    match log4rs::init_file("config/log4rs.yaml", Default::default()) {
+        Ok(_) => {}
+        Err(_) => {
+            let file_appender = FileAppender::builder()
+                .encoder(Box::new(PatternEncoder::new(
+                    "{d(%Y-%m-%d %H:%M:%S%.3f)} {h({l})} {M} - {m}{n}",
+                )))
+                .build("logs/rodos.logs")
+                .unwrap();
+
+            let log_config = log4rs::config::Config::builder()
+                .appender(Appender::builder().build("file_appender", Box::new(file_appender)))
+                .logger(
+                    Logger::builder()
+                        .appender("file_appender")
+                        .additive(false)
+                        .build("rodos", log::LevelFilter::Info),
+                )
+                .build(
+                    Root::builder()
+                        .appender("file_appender")
+                        .build(log::LevelFilter::Info),
+                )
+                .unwrap();
+
+            log4rs::init_config(log_config).unwrap();
         }
     }
 }

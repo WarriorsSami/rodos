@@ -1,3 +1,4 @@
+use crate::application::cat::CatRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
@@ -26,7 +27,7 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the file already exists or there is not enough space in the disk or
     /// a file with the same name already exists.
-    fn create_file(&mut self, request: CreateRequest) -> Void;
+    fn create_file(&mut self, request: &CreateRequest) -> Void;
 
     /// List all the files from the working directory
     /// ## Errors
@@ -38,14 +39,21 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// * `request` - The request containing the old and the new names.
     /// ## Errors
     /// * `Box<dyn Error>` - If the old file does not exist or a file with the same name as the new one already exists.
-    fn rename_file(&mut self, request: RenameRequest) -> Void;
+    fn rename_file(&mut self, request: &RenameRequest) -> Void;
 
     /// Deletes a file with the given name.
     /// ## Arguments
     /// * `request` - The request containing the file name and the file extension.
     /// ## Errors
     /// * `Box<dyn Error>` - If the file does not exist.
-    fn delete_file(&mut self, request: DeleteRequest) -> Void;
+    fn delete_file(&mut self, request: &DeleteRequest) -> Void;
+
+    /// Displays the content of a file with the given name.
+    /// ## Arguments
+    /// * `request` - The request containing the file name and the file extension.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the file does not exist.
+    fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>>;
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;

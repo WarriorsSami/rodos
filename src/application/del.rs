@@ -44,7 +44,7 @@ impl RequestHandler<DeleteRequest, Void> for DeleteHandler {
         );
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.delete_file(request) {
+            Ok(mut disk_manager) => match disk_manager.delete_file(&request) {
                 Ok(_) => {
                     log::info!("Deleted file successfully");
                     Ok(())
