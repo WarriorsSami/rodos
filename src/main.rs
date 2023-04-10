@@ -81,60 +81,21 @@ fn main() {
         }
 
         match command.unwrap() {
-            "neofetch" => match CliParser::parse_neofetch(input.as_str()) {
-                Ok(request) => {
-                    if let Err(err) = mediator.send(request).unwrap() {
-                        error!(err);
-                    }
-                }
-                Err(err) => {
-                    warn!(err);
-                }
-            },
-            "create" => match CliParser::parse_create(input.as_str()) {
-                Ok(request) => {
-                    if let Err(err) = mediator.send(request).unwrap() {
-                        error!(err);
-                    } else {
-                        success!("File created successfully!");
-                    }
-                }
-                Err(err) => {
-                    warn!(err);
-                }
-            },
-            "ls" => match CliParser::parse_ls(input.as_str()) {
-                Ok(request) => {
-                    if let Err(err) = mediator.send(request).unwrap() {
-                        warn!(err);
-                    }
-                }
-                Err(err) => {
-                    warn!(err);
-                }
-            },
-            "rename" => match CliParser::parse_rename(input.as_str()) {
-                Ok(request) => {
-                    if let Err(err) = mediator.send(request).unwrap() {
-                        error!(err);
-                    } else {
-                        success!("File renamed successfully!");
-                    }
-                }
-                Err(err) => {
-                    warn!(err);
-                }
-            },
-            "help" => match CliParser::parse_help(input.as_str()) {
-                Ok(request) => {
-                    if let Err(err) = mediator.send(request).unwrap() {
-                        warn!(err);
-                    }
-                }
-                Err(err) => {
-                    warn!(err);
-                }
-            },
+            "neofetch" => handle!(mediator, parse_neofetch, input.as_str()),
+            "create" => handle!(
+                mediator,
+                parse_create,
+                input.as_str(),
+                "File created successfully!"
+            ),
+            "ls" => handle!(mediator, parse_ls, input.as_str()),
+            "rename" => handle!(
+                mediator,
+                parse_rename,
+                input.as_str(),
+                "File renamed successfully!"
+            ),
+            "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => match CliParser::parse_exit(input.as_str()) {
                 Ok(_) => {
                     warn!("RoDOS is shutting down...");

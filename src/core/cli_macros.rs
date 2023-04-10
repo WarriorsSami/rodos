@@ -1,4 +1,4 @@
-// macro prompt! for printing prompt messages to stdout
+/// macro `prompt!` for printing prompt messages to stdout
 #[macro_export]
 macro_rules! prompt {
     ($($arg:tt)*) => {
@@ -15,7 +15,7 @@ macro_rules! prompt {
     };
 }
 
-// macro error! for printing error messages to stdout
+/// macro `error!` for printing error messages to stdout
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)+) => {
@@ -23,7 +23,7 @@ macro_rules! error {
     };
 }
 
-// macro success! for printing success messages to stdout
+/// macro `success!` for printing success messages to stdout
 #[macro_export]
 macro_rules! success {
     ($($arg:tt)+) => {
@@ -31,7 +31,7 @@ macro_rules! success {
     };
 }
 
-// macro warn! for printing warning messages to stdout
+/// macro `warn!` for printing warning messages to stdout
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)+) => {
@@ -39,11 +39,42 @@ macro_rules! warn {
     };
 }
 
-// macro info! for printing info messages to stdout
+/// macro `info!` for printing info messages to stdout
 #[macro_export]
 macro_rules! info {
     ($fmt:expr $(, $arg:tt)*) => {
         let s = format!($fmt $(, $arg)*);
         cprintln!("<c>{}</>", s);
+    };
+}
+
+/// macro `handle!` for invoking the associated regex parser and mediator handler for a given command
+#[macro_export]
+macro_rules! handle {
+    ($mediator:tt, $parser_fn:tt, $input:expr) => {
+        match CliParser::$parser_fn($input) {
+            Ok(request) => {
+                if let Err(err) = $mediator.send(request).unwrap() {
+                    error!(err);
+                }
+            }
+            Err(err) => {
+                warn!(err);
+            }
+        }
+    };
+    ($mediator:tt, $parser_fn:tt, $input:expr, $success:expr) => {
+        match CliParser::$parser_fn($input) {
+            Ok(request) => {
+                if let Err(err) = $mediator.send(request).unwrap() {
+                    error!(err);
+                } else {
+                    success!($success);
+                }
+            }
+            Err(err) => {
+                warn!(err);
+            }
+        }
     };
 }
