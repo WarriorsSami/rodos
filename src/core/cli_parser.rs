@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::del::DeleteRequest;
 use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
 use crate::application::neofetch::NeofetchRequest;
@@ -148,6 +149,30 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid rename command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_del(input: &str) -> Result<DeleteRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("del").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("del").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+            let extension = captures.name("extension").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            if extension.len() > 3 {
+                return Err(Box::try_from("Extension must be 3 characters or less!").unwrap());
+            }
+
+            Ok(DeleteRequest::new(name.to_string(), extension.to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid delete command syntax!").unwrap())
         }
     }
 }

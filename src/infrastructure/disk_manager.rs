@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::config::Config;
@@ -385,6 +386,37 @@ impl IDiskManager for DiskManager {
 
         self.root[file_entry_index].name = request.new_name;
         self.root[file_entry_index].extension = request.new_extension;
+
+        // push sync
+        self.push_sync();
+
+        Ok(())
+    }
+
+    fn delete_file(&mut self, request: DeleteRequest) -> Void {
+        // check if the file exists in root
+        if !self.root.iter().any(|file_entry| {
+            file_entry.name == request.file_name && file_entry.extension == request.file_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} does not exist",
+                request.file_name, request.file_extension
+            ))
+            .unwrap());
+        }
+
+        // delete the file in root and free the cluster chain in fat
+        let file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| {
+                file_entry.name == request.file_name
+                    && file_entry.extension == request.file_extension
+            })
+            .unwrap_or_default();
+
+        let file_entry = self.root[file_entry_index].clone();
+        self.free_clusters_and_entry(&file_entry);
 
         // push sync
         self.push_sync();

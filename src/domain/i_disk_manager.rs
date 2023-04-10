@@ -1,4 +1,5 @@
 use crate::application::create::CreateRequest;
+use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::domain::file_entry::RootTable;
@@ -38,6 +39,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the old file does not exist or a file with the same name as the new one already exists.
     fn rename_file(&mut self, request: RenameRequest) -> Void;
+
+    /// Deletes a file with the given name.
+    /// ## Arguments
+    /// * `request` - The request containing the file name and the file extension.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the file does not exist.
+    fn delete_file(&mut self, request: DeleteRequest) -> Void;
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;

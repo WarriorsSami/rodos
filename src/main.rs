@@ -1,4 +1,5 @@
 use crate::application::create::CreateHandler;
+use crate::application::del::DeleteHandler;
 use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
@@ -63,6 +64,7 @@ lazy_static! {
         .add_handler(CreateHandler::new(DISK_ARC.clone()))
         .add_handler(ListHandler::new(DISK_ARC.clone()))
         .add_handler(RenameHandler::new(DISK_ARC.clone()))
+        .add_handler(DeleteHandler::new(DISK_ARC.clone()))
         .build();
 }
 
@@ -126,6 +128,12 @@ fn main() {
                 parse_rename,
                 input.as_str(),
                 "File renamed successfully!"
+            ),
+            "del" => handle!(
+                mediator,
+                parse_del,
+                input.as_str(),
+                "File deleted successfully!"
             ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => match CliParser::parse_exit(input.as_str()) {

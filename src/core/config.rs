@@ -77,6 +77,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "del".to_string(),
+            Command {
+                name: "del".to_string(),
+                description: "Delete a file or a directory".to_string(),
+                usage: "del <file_name>.<file_extension>".to_string(),
+                regex: r"^\s*del\s+(?P<name>\S+)\.(?P<extension>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

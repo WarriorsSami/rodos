@@ -36,7 +36,7 @@ macro_rules! error {
 #[macro_export]
 macro_rules! success {
     ($($arg:tt)+) => {
-        cprintln!("<g!>Success: {}</>", $($arg)+);
+        cprintln!("<g!>{}</>", $($arg)+);
     };
 }
 

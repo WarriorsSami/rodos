@@ -43,8 +43,9 @@ impl CreateHandler {
 impl RequestHandler<CreateRequest, Void> for CreateHandler {
     fn handle(&mut self, request: CreateRequest) -> Void {
         log::info!(
-            "Creating file {} with dimension {} and content type {}",
+            "Creating file {}.{} with dimension {} and content type {}",
             request.file_name,
+            request.file_extension,
             request.file_size,
             request.content_type
         );
