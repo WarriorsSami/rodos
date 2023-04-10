@@ -1,4 +1,5 @@
 use crate::application::cat::CatHandler;
+use crate::application::cp::CopyHandler;
 use crate::application::create::CreateHandler;
 use crate::application::del::DeleteHandler;
 use crate::application::help::HelpHandler;
@@ -67,6 +68,7 @@ lazy_static! {
         .add_handler(RenameHandler::new(DISK_ARC.clone()))
         .add_handler(DeleteHandler::new(DISK_ARC.clone()))
         .add_handler(CatHandler::new(DISK_ARC.clone()))
+        .add_handler(CopyHandler::new(DISK_ARC.clone()))
         .build();
 }
 
@@ -117,6 +119,12 @@ fn main() {
                 "File deleted successfully!"
             ),
             "cat" => handle!(mediator, parse_cat, input.as_str()),
+            "cp" => handle!(
+                mediator,
+                parse_cp,
+                input.as_str(),
+                "File copied successfully!"
+            ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => match CliParser::parse_exit(input.as_str()) {
                 Ok(_) => {

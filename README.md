@@ -53,7 +53,7 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     - allocate the required number of clusters
     - if `stdin` is specified, the user can write the content of the file in a separate file simulating the stdin
     and then the content of the file is copied in the new file
-  - **copy** `src_name` `dest_name` - copy a file:
+  - **cp** `src_name` `dest_name` - copy a file:
     ```bash
     rouser@rodos:~$ copy a.txt b.txt
     

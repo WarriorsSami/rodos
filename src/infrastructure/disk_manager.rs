@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
@@ -464,6 +465,117 @@ impl IDiskManager for DiskManager {
         }
 
         Ok(content)
+    }
+
+    fn copy_file(&mut self, request: &CopyRequest) -> Void {
+        // check if the src file exists in root
+        if !self.root.iter().any(|file_entry| {
+            file_entry.name == request.src_name && file_entry.extension == request.src_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} does not exist",
+                request.src_name, request.src_extension
+            ))
+            .unwrap());
+        }
+
+        // check if the dest file already exists in root
+        if self.root.iter().any(|file_entry| {
+            file_entry.name == request.dest_name && file_entry.extension == request.dest_extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} already exists",
+                request.dest_name, request.dest_extension
+            ))
+            .unwrap());
+        }
+
+        // check if there are empty entries in root
+        if !self
+            .root
+            .iter()
+            .any(|file_entry| file_entry.name.is_empty())
+        {
+            return Err(Box::try_from("No empty entries in root").unwrap());
+        }
+
+        // get the src file entry
+        let src_file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| {
+                file_entry.name == request.src_name && file_entry.extension == request.src_extension
+            })
+            .unwrap_or_default();
+
+        // check if there is enough space in fat
+        let src_file_entry = self.root[src_file_entry_index].clone();
+        let src_file_size = src_file_entry.size as usize;
+        let required_clusters = (src_file_size / self.cluster_size as usize) + 1;
+
+        if self
+            .fat
+            .iter()
+            .filter(|&fat_value| *fat_value == FatValue::Free)
+            .count()
+            < required_clusters
+        {
+            return Err(Box::try_from("Not enough space in fat").unwrap());
+        }
+
+        // create the dest file entry and register it in root
+        let dest_file_first_cluster = self
+            .fat
+            .iter()
+            .position(|fat_value| *fat_value == FatValue::Free)
+            .unwrap() as u32;
+        let dest_file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| file_entry.name.is_empty())
+            .unwrap();
+
+        let dest_file_entry = FileEntry::new(
+            request.dest_name.to_owned(),
+            request.dest_extension.to_owned(),
+            src_file_entry.size,
+            dest_file_first_cluster,
+            FileEntryAttributes::File as u8,
+        );
+        self.root[dest_file_entry_index] = dest_file_entry.clone();
+
+        // iterate through the cluster chain and copy the file content from the storage buffer
+        let mut current_src_cluster_index = src_file_entry.first_cluster as usize;
+        let mut current_dest_cluster_index = dest_file_entry.first_cluster as usize;
+
+        while self.fat[current_src_cluster_index] != FatValue::EndOfChain {
+            self.storage_buffer[current_dest_cluster_index] =
+                self.storage_buffer[current_src_cluster_index].clone();
+
+            let next_dest_cluster_index: u16 = self
+                .fat
+                .iter()
+                .enumerate()
+                .position(|(cluster_index, fat_value)| {
+                    *fat_value == FatValue::Free && cluster_index > current_dest_cluster_index
+                })
+                .unwrap() as u16;
+
+            self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index as u32);
+            current_dest_cluster_index = next_dest_cluster_index as usize;
+
+            let next_src_cluster_index: u16 = self.fat[current_src_cluster_index].clone().into();
+            current_src_cluster_index = next_src_cluster_index as usize;
+        }
+
+        self.storage_buffer[current_dest_cluster_index] =
+            self.storage_buffer[current_src_cluster_index].clone();
+        self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
+
+        // push sync
+        self.push_sync();
+
+        Ok(())
     }
 
     fn get_working_directory(&self) -> String {

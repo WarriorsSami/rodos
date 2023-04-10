@@ -1,6 +1,7 @@
 use std::error::Error;
 
 pub(crate) mod cat;
+pub(crate) mod cp;
 pub(crate) mod create;
 pub(crate) mod del;
 pub(crate) mod help;

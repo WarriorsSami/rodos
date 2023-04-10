@@ -97,6 +97,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "cp".to_string(),
+            Command {
+                name: "cp".to_string(),
+                description: "Copy a file".to_string(),
+                usage: "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension>".to_string(),
+                regex: r"^\s*cp\s+(?P<src_name>\S+)\.(?P<src_extension>\S+)\s+(?P<dest_name>\S+)\.(?P<dest_extension>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

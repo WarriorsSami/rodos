@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
@@ -54,6 +55,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the file does not exist.
     fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>>;
+
+    /// Copies a file with the given name.
+    /// ## Arguments
+    /// * `request` - The request containing the file name and the file extension for the source file and the destination file.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the source file does not exist or a file with the same name as the destination file already exists.
+    fn copy_file(&mut self, request: &CopyRequest) -> Void;
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;

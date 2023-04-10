@@ -60,3 +60,9 @@ terminator = "$"
     description = "Display the content of a file"
     usage = "cat <file_name>.<file_extension>"
     regex = "^\\s*cat\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s*$"
+
+    [commands.cp]
+    name = "cp"
+    description = "Copy a file"
+    usage = "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension>"
+    regex = "^\\s*cp\\s+(?P<src_name>\\S+)\\.(?P<src_extension>\\S+)\\s+(?P<dest_name>\\S+)\\.(?P<dest_extension>\\S+)\\s*$"
