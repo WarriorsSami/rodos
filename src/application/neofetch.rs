@@ -1,6 +1,6 @@
 use crate::application::Void;
+use crate::core::config::Config;
 use crate::core::Arm;
-use crate::domain::config::Config;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
@@ -28,6 +28,8 @@ impl NeofetchHandler {
 
 impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
     fn handle(&mut self, _event: NeofetchRequest) -> Void {
+        log::info!("Showing OS specifications...");
+
         match self.config.lock() {
             Ok(config) => {
                 cprintln!("<bold>
@@ -63,10 +65,11 @@ impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
                     config.cluster_size,
                     config.cluster_size * config.cluster_count,
                 );
+                log::info!("Showing OS specifications... done");
 
                 Ok(())
             }
-            Err(_) => Err(Box::try_from("Failed to lock config").unwrap()),
+            Err(_) => Err(Box::try_from("Unable to lock config").unwrap()),
         }
     }
 }

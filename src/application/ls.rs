@@ -25,6 +25,8 @@ impl ListHandler {
 
 impl RequestHandler<ListRequest, Void> for ListHandler {
     fn handle(&mut self, _request: ListRequest) -> Void {
+        log::info!("Listing files...");
+
         match self.disk_manager.lock() {
             Ok(mut disk_manager) => match disk_manager.list_files() {
                 Ok(file_entries) => {
@@ -41,6 +43,7 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                     println!("Free space: {} B", disk_manager.get_free_space());
                     println!("Total space: {} B", disk_manager.get_total_space());
 
+                    log::info!("Listed files successfully");
                     Ok(())
                 }
                 Err(e) => Err(e),

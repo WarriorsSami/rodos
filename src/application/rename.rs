@@ -3,6 +3,7 @@ use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
+#[derive(Debug, Clone)]
 pub(crate) struct RenameRequest {
     pub(crate) old_name: String,
     pub(crate) old_extension: String,
@@ -40,9 +41,20 @@ impl RenameHandler {
 
 impl RequestHandler<RenameRequest, Void> for RenameHandler {
     fn handle(&mut self, request: RenameRequest) -> Void {
+        log::info!("Renaming file...");
+
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.rename_file(request) {
-                Ok(_) => Ok(()),
+            Ok(mut disk_manager) => match disk_manager.rename_file(request.clone()) {
+                Ok(_) => {
+                    log::info!(
+                        "File {}.{} renamed successfully to {}.{}!",
+                        request.old_name,
+                        request.old_extension,
+                        request.new_name,
+                        request.new_extension
+                    );
+                    Ok(())
+                }
                 Err(e) => Err(e),
             },
             Err(_) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),

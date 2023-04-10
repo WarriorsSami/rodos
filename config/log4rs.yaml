@@ -1,0 +1,18 @@
+refresh_rate: 30 seconds
+appenders:
+  file_appender:
+    kind: file
+    path: "logs/rodos.logs"
+    encoder:
+      pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} {h({l})} {M} - {m}{n}"
+
+root:
+    level: info
+    appenders:
+        - file_appender
+
+loggers:
+    log4rs:
+        level: info
+        appenders:
+        - file_appender

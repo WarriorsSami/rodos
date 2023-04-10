@@ -1,9 +1,9 @@
 use crate::application::create::CreateRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
+use crate::core::config::Config;
 use crate::core::content_type::ContentGenerator;
 use crate::core::Arm;
-use crate::domain::config::Config;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
@@ -64,7 +64,8 @@ pub(crate) struct DiskManager {
 
 impl DiskManager {
     pub(crate) fn new(config: Arm<Config>) -> Self {
-        let config = config.lock().unwrap();
+        log::info!("Initializing the disk manager...");
+        let config = config.lock().expect("Unable to lock config");
 
         let fat_clusters = 2 * config.cluster_count / config.cluster_size;
         let root_clusters = 64;
@@ -84,6 +85,9 @@ impl DiskManager {
         storage_buffer
             .iter_mut()
             .for_each(|cluster| cluster.resize(config.cluster_size as usize, 0));
+
+        log::debug!("{:?}", fat);
+        log::debug!("{:?}", root);
 
         Self {
             fat,
@@ -168,7 +172,7 @@ impl DiskManager {
                     .fat
                     .chunks_mut(fat_cells_per_cluster as usize)
                     .nth(cluster_index)
-                    .unwrap();
+                    .unwrap_or_default();
 
                 cluster
                     .chunks(2)

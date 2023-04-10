@@ -10,8 +10,17 @@ macro_rules! prompt {
             CONFIG.prompt.path_prefix,
             CONFIG.prompt.terminator
         );
+
         // Flush the buffer to print the prompt before reading the input
-        std::io::stdout().flush().expect("Unable to flush stdout");
+        match std::io::stdout().flush() {
+            Ok(..) => {}
+            Err(err) => {
+                warn!("Unable to flush stdout, please try again!");
+
+                log::warn!("Unable to flush stdout, please try again! Error: {}", err);
+                continue;
+            }
+        }
     };
 }
 
@@ -56,10 +65,12 @@ macro_rules! handle {
             Ok(request) => {
                 if let Err(err) = $mediator.send(request).unwrap() {
                     error!(err);
+                    log::error!("mediator_level: {}", err);
                 }
             }
             Err(err) => {
                 warn!(err);
+                log::warn!("parser_level: {}", err);
             }
         }
     };
@@ -68,12 +79,15 @@ macro_rules! handle {
             Ok(request) => {
                 if let Err(err) = $mediator.send(request).unwrap() {
                     error!(err);
+                    log::error!("mediator_level: {}", err);
                 } else {
                     success!($success);
+                    log::info!("{}", $success);
                 }
             }
             Err(err) => {
                 warn!(err);
+                log::warn!("parser_level: {}", err);
             }
         }
     };

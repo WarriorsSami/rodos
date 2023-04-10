@@ -4,12 +4,15 @@ use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
 use crate::application::rename::RenameHandler;
 use crate::core::cli_parser::CliParser;
+use crate::core::config::Config;
 use crate::core::Arm;
-use crate::domain::config::Config;
 use crate::domain::i_disk_manager::IDiskManager;
 use crate::infrastructure::disk_manager::DiskManager;
 use color_print::*;
 use lazy_static::lazy_static;
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Root};
+use log4rs::encode::pattern::PatternEncoder;
 use mediator::{DefaultMediator, Mediator};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -22,7 +25,7 @@ mod infrastructure;
 // config
 lazy_static! {
     pub(crate) static ref CONFIG: Config = {
-        let config_res = std::fs::read_to_string("config.toml");
+        let config_res = std::fs::read_to_string("config/config.toml");
 
         let config: Config = match config_res {
             Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
@@ -64,15 +67,44 @@ lazy_static! {
 }
 
 fn main() {
+    match log4rs::init_file("config/log4rs.yaml", Default::default()) {
+        Ok(_) => {}
+        Err(_) => {
+            let file_appender = FileAppender::builder()
+                .encoder(Box::new(PatternEncoder::new(
+                    "{d(%Y-%m-%d %H:%M:%S%.3f)} {h({l})} {M} - {m}{n}",
+                )))
+                .build("logs/rodos.logs")
+                .unwrap();
+
+            let log_config = log4rs::config::Config::builder()
+                .appender(Appender::builder().build("file_appender", Box::new(file_appender)))
+                .build(
+                    Root::builder()
+                        .appender("file_appender")
+                        .build(log::LevelFilter::Info),
+                )
+                .unwrap();
+
+            log4rs::init_config(log_config).unwrap();
+        }
+    }
     let mut mediator = MEDIATOR.clone();
 
+    log::info!("RoDOS is booting up...");
     loop {
         prompt!();
 
         let mut input = String::new();
-        std::io::stdin()
-            .read_line(&mut input)
-            .expect("Unable to read input");
+        match std::io::stdin().read_line(&mut input) {
+            Ok(..) => {}
+            Err(err) => {
+                warn!("Unable to read input, please try again!");
+
+                log::warn!("Unable to read input, please try again! Error: {}", err);
+                continue;
+            }
+        }
         let command = input.split_whitespace().next();
 
         if command.is_none() {
@@ -99,10 +131,13 @@ fn main() {
             "exit" => match CliParser::parse_exit(input.as_str()) {
                 Ok(_) => {
                     warn!("RoDOS is shutting down...");
+
+                    log::info!("RoDOS is booting down...");
                     std::process::exit(0);
                 }
                 Err(err) => {
                     warn!(err);
+                    log::error!("{}", err);
                 }
             },
             _ => {

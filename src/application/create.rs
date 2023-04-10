@@ -42,6 +42,12 @@ impl CreateHandler {
 
 impl RequestHandler<CreateRequest, Void> for CreateHandler {
     fn handle(&mut self, request: CreateRequest) -> Void {
+        log::info!(
+            "Creating file {} with dimension {} and content type {}",
+            request.file_name,
+            request.file_size,
+            request.content_type
+        );
         cprintln!(
             "Creating file <b!>{}.{}</> with dimension <y!>{}</> and content type <y!>{}</>...",
             request.file_name,
@@ -52,7 +58,10 @@ impl RequestHandler<CreateRequest, Void> for CreateHandler {
 
         match self.disk_manager.lock() {
             Ok(mut disk_manager) => match disk_manager.create_file(request) {
-                Ok(_) => Ok(()),
+                Ok(_) => {
+                    log::info!("Created file successfully");
+                    Ok(())
+                }
                 Err(e) => Err(e),
             },
             Err(_) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),

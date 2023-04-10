@@ -1,6 +1,6 @@
 use crate::application::Void;
+use crate::core::config::Config;
 use crate::core::Arm;
-use crate::domain::config::Config;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
@@ -26,16 +26,19 @@ impl HelpHandler {
 
 impl RequestHandler<HelpRequest, Void> for HelpHandler {
     fn handle(&mut self, _request: HelpRequest) -> Void {
+        log::info!("Showing help...");
+
         match self.config.lock() {
             Ok(config) => {
                 cprintln!("<c!>Available commands:</>");
-                config.commands.iter().for_each(|(name, command)| {
-                    cprintln!("<c!>{}</> - {}", command.name, command.description)
+                config.commands.iter().for_each(|(_name, command)| {
+                    cprintln!("<g!>{}</> - {}", command.name, command.description)
                 });
 
+                log::info!("Help shown successfully!");
                 Ok(())
             }
-            Err(_) => Err(Box::try_from("Failed to lock config").unwrap()),
+            Err(_) => Err(Box::try_from("Unable to lock config").unwrap()),
         }
     }
 }
