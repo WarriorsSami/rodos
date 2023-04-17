@@ -1,6 +1,7 @@
 use crate::application::Void;
 use crate::core::config::Config;
 use crate::core::Arm;
+use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
@@ -18,11 +19,15 @@ impl Request<Void> for NeofetchRequest {}
 // NeofetchHandler is a handler for NeofetchRequest.
 pub(crate) struct NeofetchHandler {
     config: Arm<Config>,
+    disk_manager: Arm<dyn IDiskManager>,
 }
 
 impl NeofetchHandler {
-    pub(crate) fn new(config: Arm<Config>) -> NeofetchHandler {
-        NeofetchHandler { config }
+    pub(crate) fn new(config: Arm<Config>, disk_manager: Arm<dyn IDiskManager>) -> NeofetchHandler {
+        NeofetchHandler {
+            config,
+            disk_manager,
+        }
     }
 }
 
@@ -32,6 +37,8 @@ impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
 
         match self.config.lock() {
             Ok(config) => {
+                let boot_sector = self.disk_manager.lock().unwrap().get_boot_sector();
+
                 cprintln!("<bold>
                     <w!>WWWWWWWWWWWX</><c!>Okk0</><w!>XWWXXK</><c!>00000</><w!>KNWWWWWWWWWWW</>            <w!>{}</><b!>{}</><w!>{}</>
                     <w!>WWWWWWWN</><c!>0xlcok</><w!>XWWK</><c!>xooolllllodxO</><w!>KNWWWWWWW</>            <k!>----------------</>
@@ -60,10 +67,10 @@ impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
                     config.os,
                     config.version,
                     config.author,
-                    config.cluster_size,
-                    config.cluster_count,
-                    config.cluster_size,
-                    config.cluster_size * config.cluster_count,
+                    boot_sector.cluster_size,
+                    boot_sector.cluster_count,
+                    boot_sector.cluster_size,
+                    boot_sector.cluster_size as u32 * boot_sector.cluster_count as u32,
                 );
                 log::info!("Showing OS specifications... done");
 

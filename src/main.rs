@@ -62,7 +62,7 @@ lazy_static! {
     };
     pub(crate) static ref MEDIATOR: DefaultMediator = DefaultMediator::builder()
         .add_handler(HelpHandler::new(CONFIG_ARC.clone()))
-        .add_handler(NeofetchHandler::new(CONFIG_ARC.clone()))
+        .add_handler(NeofetchHandler::new(CONFIG_ARC.clone(), DISK_ARC.clone()))
         .add_handler(CreateHandler::new(DISK_ARC.clone()))
         .add_handler(ListHandler::new(DISK_ARC.clone()))
         .add_handler(RenameHandler::new(DISK_ARC.clone()))

@@ -7,6 +7,7 @@ use crate::application::Void;
 use crate::core::config::Config;
 use crate::core::content_type::ContentGenerator;
 use crate::core::Arm;
+use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
@@ -58,9 +59,8 @@ pub(crate) type StorageBuffer = Vec<ByteArray>;
 pub(crate) struct DiskManager {
     fat: FatTable,
     root: RootTable,
-    working_directory: String,
-    cluster_size: u32,
-    cluster_count: u32,
+    working_directory: FileEntry,
+    boot_sector: BootSector,
     storage_buffer: StorageBuffer,
     storage_file_path: String,
 }
@@ -69,25 +69,27 @@ impl DiskManager {
     pub(crate) fn new(config: Arm<Config>) -> Self {
         log::info!("Initializing the disk manager...");
         let config = config.lock().expect("Unable to lock config");
+        let boot_sector = BootSector::default();
 
-        let fat_clusters = 2 * config.cluster_count / config.cluster_size;
-        let root_clusters = 64;
+        let fat_clusters =
+            boot_sector.fat_cell_size * boot_sector.cluster_count / boot_sector.cluster_size;
+        let root_clusters = boot_sector.root_entry_count;
 
         let mut fat = Vec::new();
-        fat.resize(config.cluster_count as usize, FatValue::Free);
+        fat.resize(boot_sector.cluster_count as usize, FatValue::Free);
 
         let mut root = Vec::new();
         root.resize(root_clusters as usize, FileEntry::default());
 
-        for i in 0..fat_clusters + root_clusters {
+        for i in 0..boot_sector.clusters_per_boot_sector + fat_clusters + root_clusters {
             fat[i as usize] = FatValue::Reserved;
         }
 
         let mut storage_buffer: StorageBuffer = Vec::new();
-        storage_buffer.resize(config.cluster_count as usize, Vec::new());
+        storage_buffer.resize(boot_sector.cluster_count as usize, Vec::new());
         storage_buffer
             .iter_mut()
-            .for_each(|cluster| cluster.resize(config.cluster_size as usize, 0));
+            .for_each(|cluster| cluster.resize(boot_sector.cluster_size as usize, 0));
 
         log::debug!("{:?}", fat);
         log::debug!("{:?}", root);
@@ -95,26 +97,47 @@ impl DiskManager {
         Self {
             fat,
             root,
-            working_directory: "/".to_string(),
-            cluster_size: config.cluster_size,
-            cluster_count: config.cluster_count,
+            working_directory: FileEntry::root(),
+            boot_sector,
             storage_buffer,
             storage_file_path: config.storage_file_path.clone(),
         }
     }
 
     fn sync_to_buffer(&mut self) {
+        // sync boot sector to storage buffer
+        let boot_sector_clusters = self.boot_sector.clusters_per_boot_sector as usize;
+        let mut boot_sector_data: ByteArray = self.boot_sector.clone().into();
+
+        self.storage_buffer
+            .iter_mut()
+            .take(boot_sector_clusters)
+            .for_each(|cluster| {
+                let cluster_size = cluster.len();
+                let boot_sector_current_data = boot_sector_data
+                    .drain(..cluster_size)
+                    .collect::<ByteArray>();
+
+                cluster.copy_from_slice(&boot_sector_current_data);
+            });
+
         // sync fat to storage buffer
-        let fat_clusters = 2 * self.fat.len() / self.cluster_size as usize;
-        let fat_cells_per_cluster = self.cluster_size / 2;
+        let fat_clusters = self.boot_sector.fat_cell_size as usize * self.fat.len()
+            / self.boot_sector.cluster_size as usize;
+        let fat_cells_per_cluster = self.boot_sector.cluster_size / self.boot_sector.fat_cell_size;
 
         self.fat
             .chunks(fat_cells_per_cluster as usize)
-            .zip(self.storage_buffer.iter_mut().take(fat_clusters))
+            .zip(
+                self.storage_buffer
+                    .iter_mut()
+                    .skip(boot_sector_clusters)
+                    .take(fat_clusters),
+            )
             .for_each(|(fat_chunk, cluster)| {
                 fat_chunk
                     .iter()
-                    .zip(cluster.chunks_mut(2))
+                    .zip(cluster.chunks_mut(self.boot_sector.fat_cell_size as usize))
                     .for_each(|(fat_value, chunk)| {
                         let value: u16 = fat_value.clone().into();
 
@@ -127,7 +150,11 @@ impl DiskManager {
         // sync root to storage buffer
         self.root
             .iter()
-            .zip(self.storage_buffer.iter_mut().skip(fat_clusters))
+            .zip(
+                self.storage_buffer
+                    .iter_mut()
+                    .skip(boot_sector_clusters + fat_clusters),
+            )
             .for_each(|(file_entry, cluster)| {
                 let file_entry_data: ByteArray = file_entry.clone().into();
                 cluster[..file_entry_data.len()].clone_from_slice(&file_entry_data);
@@ -162,12 +189,26 @@ impl DiskManager {
     fn sync_from_buffer(&mut self) {
         self.sync_from_file();
 
+        // sync boot sector from storage buffer
+        let boot_sector_clusters = self.boot_sector.clusters_per_boot_sector as usize;
+        let boot_sector_data: ByteArray = self
+            .storage_buffer
+            .iter()
+            .take(boot_sector_clusters)
+            .flatten()
+            .copied()
+            .collect();
+
+        self.boot_sector = BootSector::from(boot_sector_data);
+
         // sync fat from storage buffer
-        let fat_clusters = 2 * self.fat.len() / self.cluster_size as usize;
-        let fat_cells_per_cluster = self.cluster_size / 2;
+        let fat_clusters = self.boot_sector.fat_cell_size as usize * self.fat.len()
+            / self.boot_sector.cluster_size as usize;
+        let fat_cells_per_cluster = self.boot_sector.cluster_size / self.boot_sector.fat_cell_size;
 
         self.storage_buffer
             .iter()
+            .skip(boot_sector_clusters)
             .take(fat_clusters)
             .enumerate()
             .for_each(|(cluster_index, cluster)| {
@@ -178,7 +219,7 @@ impl DiskManager {
                     .unwrap_or_default();
 
                 cluster
-                    .chunks(2)
+                    .chunks(self.boot_sector.fat_cell_size as usize)
                     .zip(fat_chunk)
                     .for_each(|(chunk, fat_value)| {
                         let value: u16 = ((chunk[0] as u16) << 8) | (chunk[1] as u16);
@@ -189,7 +230,7 @@ impl DiskManager {
         // sync root from storage buffer
         self.storage_buffer
             .iter()
-            .skip(fat_clusters)
+            .skip(boot_sector_clusters + fat_clusters)
             .zip(self.root.iter_mut())
             .for_each(|(cluster, file_entry)| {
                 let file_entry_data: ByteArray = file_entry.clone().into();
@@ -256,7 +297,7 @@ impl IDiskManager for DiskManager {
 
         // check if there is enough space in fat
         let required_clusters =
-            (request.file_size as f64 / self.cluster_size as f64).ceil() as usize;
+            (request.file_size as f64 / self.boot_sector.cluster_size as f64).ceil() as usize;
         if self
             .fat
             .iter()
@@ -292,7 +333,7 @@ impl IDiskManager for DiskManager {
 
         // create the cluster chain in fat and write the file data to the storage buffer
         let mut current_cluster = first_cluster;
-        let mut remaining_file_size = request.file_size;
+        let mut remaining_file_size = request.file_size as u16;
         let mut file_data = ContentGenerator::generate(request.content_type, request.file_size);
 
         while remaining_file_size > 0 {
@@ -309,18 +350,19 @@ impl IDiskManager for DiskManager {
                     self.storage_buffer[current_cluster] = file_data
                         .drain(
                             ..std::cmp::min(
-                                self.cluster_size as usize,
+                                self.boot_sector.cluster_size as usize,
                                 remaining_file_size as usize,
                             ),
                         )
                         .collect();
 
-                    if remaining_file_size > self.cluster_size {
-                        remaining_file_size -= self.cluster_size;
+                    if remaining_file_size > self.boot_sector.cluster_size {
+                        remaining_file_size -= self.boot_sector.cluster_size;
                         current_cluster = next_cluster;
                     } else {
                         // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster].resize(self.cluster_size as usize, 0);
+                        self.storage_buffer[current_cluster]
+                            .resize(self.boot_sector.cluster_size as usize, 0);
                         self.fat[current_cluster] = FatValue::EndOfChain;
                         remaining_file_size = 0;
                     }
@@ -457,7 +499,7 @@ impl IDiskManager for DiskManager {
 
         while self.fat[current_cluster] != FatValue::EndOfChain {
             content.push_str(&String::from_utf8_lossy(
-                &self.storage_buffer[current_cluster][..self.cluster_size as usize],
+                &self.storage_buffer[current_cluster][..self.boot_sector.cluster_size as usize],
             ));
 
             let next_cluster_index: u16 = self.fat[current_cluster].clone().into();
@@ -511,7 +553,7 @@ impl IDiskManager for DiskManager {
         // check if there is enough space in fat
         let src_file_entry = self.root[src_file_entry_index].clone();
         let src_file_size = src_file_entry.size as usize;
-        let required_clusters = (src_file_size / self.cluster_size as usize) + 1;
+        let required_clusters = (src_file_size / self.boot_sector.cluster_size as usize) + 1;
 
         if self
             .fat
@@ -579,7 +621,11 @@ impl IDiskManager for DiskManager {
     }
 
     fn get_working_directory(&self) -> String {
-        self.working_directory.clone()
+        self.working_directory.name.clone()
+    }
+
+    fn get_boot_sector(&self) -> BootSector {
+        self.boot_sector.clone()
     }
 
     fn get_free_space(&mut self) -> u64 {
@@ -591,10 +637,10 @@ impl IDiskManager for DiskManager {
             .filter(|&fat_value| *fat_value == FatValue::Free)
             .count();
 
-        (free_clusters * self.cluster_size as usize) as u64
+        (free_clusters * self.boot_sector.cluster_size as usize) as u64
     }
 
     fn get_total_space(&self) -> u64 {
-        (self.fat.len() * self.cluster_size as usize) as u64
+        (self.fat.len() * self.boot_sector.cluster_size as usize) as u64
     }
 }

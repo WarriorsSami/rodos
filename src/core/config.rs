@@ -8,8 +8,6 @@ pub(crate) struct Config {
     pub(crate) author: String,
     pub(crate) prompt: Prompt,
     pub(crate) commands: Commands,
-    pub(crate) cluster_size: u32,
-    pub(crate) cluster_count: u32,
     pub(crate) storage_file_path: String,
 }
 
@@ -113,9 +111,7 @@ impl Default for Config {
             author: "Sami Barbut-Dica".to_string(),
             prompt: Prompt::default(),
             commands,
-            cluster_size: 16,
-            cluster_count: 4096,
-            storage_file_path: "storage.bin".to_string(),
+            storage_file_path: "disk/storage.bin".to_string(),
         }
     }
 }

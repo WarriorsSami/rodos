@@ -32,7 +32,7 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
             Ok(mut disk_manager) => match disk_manager.list_files() {
                 Ok(file_entries) => {
                     cprintln!(
-                        "<w!>Current dir `{}`</>: <b!>{} files</>",
+                        "<w!>Current dir `{}`</>: <b!>{} file(s)</>",
                         disk_manager.get_working_directory(),
                         file_entries.len()
                     );

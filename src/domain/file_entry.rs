@@ -43,6 +43,16 @@ impl FileEntry {
         }
     }
 
+    pub(crate) fn root() -> Self {
+        Self {
+            name: "/".to_string(),
+            extension: "".to_string(),
+            size: 0,
+            first_cluster: 0,
+            attributes: 0,
+        }
+    }
+
     pub(crate) fn get_attributes_as_string(&self) -> String {
         let mut result = String::new();
 

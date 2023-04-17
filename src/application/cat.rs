@@ -57,7 +57,7 @@ impl RequestHandler<CatRequest, Void> for CatHandler {
                 }
                 Err(e) => Err(e),
             },
-            Err(e) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
+            Err(_e) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
         }
     }
 }

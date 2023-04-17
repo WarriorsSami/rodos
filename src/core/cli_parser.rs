@@ -10,7 +10,6 @@ use crate::application::Void;
 use crate::core::content_type::ContentType;
 use crate::{info, CONFIG};
 use color_print::cprintln;
-use log::log;
 use std::error::Error;
 
 pub(crate) struct CliParser;

@@ -4,6 +4,7 @@ use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
+use crate::domain::boot_sector::BootSector;
 use crate::domain::file_entry::RootTable;
 use std::error::Error;
 
@@ -65,6 +66,9 @@ pub(crate) trait IDiskManager: Sync + Send {
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;
+
+    /// Get boot sector
+    fn get_boot_sector(&self) -> BootSector;
 
     /// Returns the free space in the disk with respect to the total number of empty clusters
     fn get_free_space(&mut self) -> u64;
