@@ -11,6 +11,7 @@ use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
+use chrono::Utc;
 use std::error::Error;
 use std::io::{Read, Write};
 
@@ -73,13 +74,14 @@ impl DiskManager {
 
         let fat_clusters =
             boot_sector.fat_cell_size * boot_sector.cluster_count / boot_sector.cluster_size;
-        let root_clusters = boot_sector.root_entry_count;
+        let root_clusters = boot_sector.root_entry_cell_size * boot_sector.root_entry_count
+            / boot_sector.cluster_size;
 
         let mut fat = Vec::new();
         fat.resize(boot_sector.cluster_count as usize, FatValue::Free);
 
         let mut root = Vec::new();
-        root.resize(root_clusters as usize, FileEntry::default());
+        root.resize(boot_sector.root_entry_count as usize, FileEntry::default());
 
         for i in 0..boot_sector.clusters_per_boot_sector + fat_clusters + root_clusters {
             fat[i as usize] = FatValue::Reserved;
@@ -90,9 +92,6 @@ impl DiskManager {
         storage_buffer
             .iter_mut()
             .for_each(|cluster| cluster.resize(boot_sector.cluster_size as usize, 0));
-
-        log::debug!("{:?}", fat);
-        log::debug!("{:?}", root);
 
         Self {
             fat,
@@ -148,16 +147,37 @@ impl DiskManager {
             });
 
         // sync root to storage buffer
+        let root_clusters = self.boot_sector.root_entry_cell_size as usize * self.root.len()
+            / self.boot_sector.cluster_size as usize;
+        let clusters_per_root_entry =
+            self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size;
+
         self.root
             .iter()
             .zip(
                 self.storage_buffer
                     .iter_mut()
-                    .skip(boot_sector_clusters + fat_clusters),
+                    .skip(boot_sector_clusters + fat_clusters)
+                    .take(root_clusters)
+                    .collect::<Vec<_>>()
+                    .chunks_mut(clusters_per_root_entry as usize),
             )
             .for_each(|(file_entry, cluster)| {
-                let file_entry_data: ByteArray = file_entry.clone().into();
-                cluster[..file_entry_data.len()].clone_from_slice(&file_entry_data);
+                let mut file_entry_data: ByteArray = file_entry.clone().into();
+
+                let cluster_size = cluster[0].len();
+                let file_entry_current_data =
+                    file_entry_data.drain(..cluster_size).collect::<ByteArray>();
+
+                cluster[0].copy_from_slice(&file_entry_current_data);
+
+                if !file_entry_data.is_empty() {
+                    let cluster_size = cluster[1].len();
+                    let file_entry_current_data =
+                        file_entry_data.drain(..cluster_size).collect::<ByteArray>();
+
+                    cluster[1].copy_from_slice(&file_entry_current_data);
+                }
             });
     }
 
@@ -174,6 +194,9 @@ impl DiskManager {
                     .write_all(cluster)
                     .expect("Unable to write to storage file")
             });
+
+        log::debug!("FAT: {:?}", self.fat);
+        log::debug!("Root: {:?}", self.root);
     }
 
     fn sync_from_file(&mut self) {
@@ -228,18 +251,29 @@ impl DiskManager {
             });
 
         // sync root from storage buffer
+        let clusters_per_root_entry =
+            self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size;
+
         self.storage_buffer
             .iter()
             .skip(boot_sector_clusters + fat_clusters)
+            .collect::<Vec<_>>()
+            .chunks(clusters_per_root_entry as usize)
             .zip(self.root.iter_mut())
             .for_each(|(cluster, file_entry)| {
-                let file_entry_data: ByteArray = file_entry.clone().into();
-                let cluster_is_empty = cluster[..file_entry_data.len()]
-                    .iter()
-                    .all(|byte| *byte == 0);
+                let cluster_is_empty = cluster[0].iter().all(|byte| *byte == 0);
 
                 *file_entry = match cluster_is_empty {
-                    false => FileEntry::from(cluster[..file_entry_data.len()].to_owned()),
+                    false => {
+                        let mut file_entry_data: ByteArray = Vec::new();
+
+                        file_entry_data.extend_from_slice(cluster[0]);
+                        if cluster.len() > 1 {
+                            file_entry_data.extend_from_slice(cluster[1]);
+                        }
+
+                        FileEntry::from(file_entry_data)
+                    }
                     true => FileEntry::default(),
                 };
             });
@@ -320,8 +354,9 @@ impl IDiskManager for DiskManager {
             request.file_name.to_owned(),
             request.file_extension.to_owned(),
             request.file_size.to_owned(),
-            first_cluster as u32,
+            first_cluster as u16,
             FileEntryAttributes::File as u8,
+            Utc::now(),
         );
         let file_entry_index = self
             .root
@@ -570,7 +605,7 @@ impl IDiskManager for DiskManager {
             .fat
             .iter()
             .position(|fat_value| *fat_value == FatValue::Free)
-            .unwrap() as u32;
+            .unwrap() as u16;
         let dest_file_entry_index = self
             .root
             .iter()
@@ -583,6 +618,7 @@ impl IDiskManager for DiskManager {
             src_file_entry.size,
             dest_file_first_cluster,
             FileEntryAttributes::File as u8,
+            Utc::now(),
         );
         self.root[dest_file_entry_index] = dest_file_entry.clone();
 

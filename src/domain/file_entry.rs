@@ -1,4 +1,5 @@
 use crate::infrastructure::disk_manager::ByteArray;
+use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use std::fmt::Display;
 use std::ops::BitOr;
 
@@ -22,8 +23,9 @@ pub(crate) struct FileEntry {
     pub(crate) name: String,
     pub(crate) extension: String,
     pub(crate) size: u32,
-    pub(crate) first_cluster: u32,
+    pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
+    pub(crate) updated_date_time: DateTime<Utc>,
 }
 
 impl FileEntry {
@@ -31,8 +33,9 @@ impl FileEntry {
         name: String,
         extension: String,
         size: u32,
-        first_cluster: u32,
+        first_cluster: u16,
         attributes: u8,
+        updated_date_time: DateTime<Utc>,
     ) -> Self {
         Self {
             name,
@@ -40,6 +43,7 @@ impl FileEntry {
             size,
             first_cluster,
             attributes,
+            updated_date_time,
         }
     }
 
@@ -50,6 +54,7 @@ impl FileEntry {
             size: 0,
             first_cluster: 0,
             attributes: 0,
+            updated_date_time: Utc::now(),
         }
     }
 
@@ -76,16 +81,36 @@ impl FileEntry {
 
         result
     }
+
+    fn convert_u16_tuple_to_date_time(value: (u16, u16)) -> DateTime<Utc> {
+        let year = (value.0 >> 9) + 1980;
+        let month = (value.0 >> 5) & 0x0F;
+        let day = value.0 & 0x1F;
+        let hour = (value.1 >> 11) & 0x1F;
+        let minute = (value.1 >> 5) & 0x3F;
+        let second = (value.1 & 0x1F) * 2;
+
+        Utc.with_ymd_and_hms(
+            year as i32,
+            month as u32,
+            day as u32,
+            hour as u32,
+            minute as u32,
+            second as u32,
+        )
+        .unwrap()
+    }
 }
 
 impl Display for FileEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} - {}.{} {} B",
+            "{} - {}.{} {} ({} B)",
             self.get_attributes_as_string(),
             self.name,
             self.extension,
+            self.updated_date_time,
             self.size
         )
     }
@@ -107,16 +132,22 @@ impl From<ByteArray> for FileEntry {
             }
         });
 
-        let size = u16::from_be_bytes([value[11], value[12]]);
-        let first_cluster = u16::from_be_bytes([value[13], value[14]]);
-        let attributes = value[15];
+        let size = u32::from_be_bytes([value[11], value[12], value[13], value[14]]);
+        let first_cluster = u16::from_be_bytes([value[15], value[16]]);
+        let attributes = value[17];
+
+        let time = u16::from_be_bytes([value[18], value[19]]);
+        let date = u16::from_be_bytes([value[20], value[21]]);
+
+        let updated_date_time = FileEntry::convert_u16_tuple_to_date_time((date, time));
 
         Self {
             name,
             extension,
-            size: size as u32,
-            first_cluster: first_cluster as u32,
+            size,
+            first_cluster,
             attributes,
+            updated_date_time,
         }
     }
 }
@@ -124,7 +155,7 @@ impl From<ByteArray> for FileEntry {
 impl Into<ByteArray> for FileEntry {
     fn into(self) -> ByteArray {
         let mut result = Vec::new();
-        result.resize(16, 0);
+        result.resize(32, 0);
 
         let name = self.name.as_bytes();
         let extension = self.extension.as_bytes();
@@ -137,14 +168,32 @@ impl Into<ByteArray> for FileEntry {
             .enumerate()
             .for_each(|(index, &value)| result[index + 8] = value);
 
-        let size = (self.size as u16).to_be_bytes();
-        let first_cluster = (self.first_cluster as u16).to_be_bytes();
+        let size = self.size.to_be_bytes();
+        let first_cluster = self.first_cluster.to_be_bytes();
 
         result[11] = size[0];
         result[12] = size[1];
-        result[13] = first_cluster[0];
-        result[14] = first_cluster[1];
-        result[15] = self.attributes;
+        result[13] = size[2];
+        result[14] = size[3];
+
+        result[15] = first_cluster[0];
+        result[16] = first_cluster[1];
+
+        result[17] = self.attributes;
+
+        let time = self.updated_date_time.time();
+        let date = self.updated_date_time.date_naive();
+
+        let time = (time.hour() << 11) | (time.minute() << 5) | (time.second() / 2);
+        let date = ((date.year() - 1980) << 9) as u32 | date.month() << 5 | date.day();
+
+        let time = (time as u16).to_be_bytes();
+        let date = (date as u16).to_be_bytes();
+
+        result[18] = time[0];
+        result[19] = time[1];
+        result[20] = date[0];
+        result[21] = date[1];
 
         result
     }

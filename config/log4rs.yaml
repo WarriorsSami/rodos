@@ -7,13 +7,13 @@ appenders:
       pattern: "{d(%Y-%m-%d %H:%M:%S%.3f)} {h({l})} {M} - {m}{n}"
 
 root:
-    level: info
+    level: debug
     appenders:
         - file_appender
 
 loggers:
     rodos:
-        level: info
+        level: debug
         appenders:
         - file_appender
         additive: false
