@@ -105,6 +105,18 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "fmt".to_string(),
+            Command {
+                name: "fmt".to_string(),
+                description:
+                    "Format the disk using the specified FAT cluster size and reboot the system"
+                        .to_string(),
+                usage: "fmt 16/32".to_string(),
+                regex: r"^\s*fmt\s+(?P<fat_type>(16|32))\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

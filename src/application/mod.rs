@@ -4,6 +4,7 @@ pub(crate) mod cat;
 pub(crate) mod cp;
 pub(crate) mod create;
 pub(crate) mod del;
+pub(crate) mod fmt;
 pub(crate) mod help;
 pub(crate) mod ls;
 pub(crate) mod neofetch;

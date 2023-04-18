@@ -2,6 +2,7 @@ use crate::application::cat::CatRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
+use crate::application::fmt::FormatRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::config::Config;
@@ -11,6 +12,7 @@ use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
+use crate::CONFIG_ARC;
 use chrono::Utc;
 use std::error::Error;
 use std::io::{Read, Write};
@@ -67,10 +69,9 @@ pub(crate) struct DiskManager {
 }
 
 impl DiskManager {
-    pub(crate) fn new(config: Arm<Config>) -> Self {
+    pub(crate) fn new(config: Arm<Config>, boot_sector: BootSector) -> Self {
         log::info!("Initializing the disk manager...");
         let config = config.lock().expect("Unable to lock config");
-        let boot_sector = BootSector::default();
 
         let fat_clusters =
             boot_sector.fat_cell_size * boot_sector.cluster_count / boot_sector.cluster_size;
@@ -380,7 +381,7 @@ impl IDiskManager for DiskManager {
                     *fat_value == FatValue::Free && cluster_index > current_cluster
                 }) {
                 Some(next_cluster) => {
-                    self.fat[current_cluster] = FatValue::Data(next_cluster as u32);
+                    self.fat[current_cluster] = FatValue::Data(next_cluster as u16);
 
                     self.storage_buffer[current_cluster] = file_data
                         .drain(
@@ -639,7 +640,7 @@ impl IDiskManager for DiskManager {
                 })
                 .unwrap() as u16;
 
-            self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index as u32);
+            self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
             current_dest_cluster_index = next_dest_cluster_index as usize;
 
             let next_src_cluster_index: u16 = self.fat[current_src_cluster_index].clone().into();
@@ -652,6 +653,19 @@ impl IDiskManager for DiskManager {
 
         // push sync
         self.push_sync();
+
+        Ok(())
+    }
+
+    fn format_disk(&mut self, request: &FormatRequest) -> Void {
+        // create a new in memory disk representation associated with the new fat type
+        let mut boot_sector = self.get_boot_sector();
+        boot_sector.cluster_size = request.fat_type;
+
+        let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), boot_sector);
+
+        // push sync the new disk representation to the storage
+        new_disk_manager.push_sync();
 
         Ok(())
     }

@@ -2,6 +2,7 @@ use crate::application::cat::CatRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
+use crate::application::fmt::FormatRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::domain::boot_sector::BootSector;
@@ -63,6 +64,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the source file does not exist or a file with the same name as the destination file already exists.
     fn copy_file(&mut self, request: &CopyRequest) -> Void;
+
+    /// Formats the disk
+    /// ## Arguments
+    /// * `request` - The request containing the FAT type.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the disk is not able to be formatted.
+    fn format_disk(&mut self, request: &FormatRequest) -> Void;
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;
