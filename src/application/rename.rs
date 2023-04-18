@@ -53,6 +53,7 @@ impl RequestHandler<RenameRequest, Void> for RenameHandler {
                         request.new_name,
                         request.new_extension
                     );
+                    disk_manager.push_sync();
                     Ok(())
                 }
                 Err(e) => Err(e),

@@ -61,6 +61,7 @@ impl RequestHandler<CreateRequest, Void> for CreateHandler {
             Ok(mut disk_manager) => match disk_manager.create_file(&request) {
                 Ok(_) => {
                     log::info!("Created file successfully");
+                    disk_manager.push_sync();
                     Ok(())
                 }
                 Err(e) => Err(e),

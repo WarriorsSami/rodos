@@ -29,27 +29,31 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
         log::info!("Listing files...");
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.list_files() {
-                Ok(file_entries) => {
-                    cprintln!(
-                        "<w!>Current dir `{}`</>: <b!>{} file(s)</>",
-                        disk_manager.get_working_directory(),
-                        file_entries.len()
-                    );
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
 
-                    file_entries.iter().for_each(|file_entry| {
-                        println!("{}", file_entry);
-                    });
+                match disk_manager.list_files() {
+                    Ok(file_entries) => {
+                        cprintln!(
+                            "<w!>Current dir `{}`</>: <b!>{} file(s)</>",
+                            disk_manager.get_working_directory(),
+                            file_entries.len()
+                        );
 
-                    println!();
-                    cprintln!("<g!>Free space:</> {} B", disk_manager.get_free_space());
-                    cprintln!("<g!>Total space:</> {} B", disk_manager.get_total_space());
+                        file_entries.iter().for_each(|file_entry| {
+                            println!("{}", file_entry);
+                        });
 
-                    log::info!("Listed files successfully");
-                    Ok(())
+                        println!();
+                        cprintln!("<g!>Free space:</> {} B", disk_manager.get_free_space());
+                        cprintln!("<g!>Total space:</> {} B", disk_manager.get_total_space());
+
+                        log::info!("Listed files successfully");
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(_) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
         }
     }

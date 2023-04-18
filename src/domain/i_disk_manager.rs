@@ -72,6 +72,11 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// * `Box<dyn Error>` - If the disk is not able to be formatted.
     fn format_disk(&mut self, request: &FormatRequest) -> Void;
 
+    /// Defragments the disk
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the disk is not able to be defragmented.
+    fn defragment_disk(&mut self) -> Void;
+
     /// Returns the working directory
     fn get_working_directory(&self) -> String;
 

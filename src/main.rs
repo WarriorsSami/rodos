@@ -1,6 +1,7 @@
 use crate::application::cat::CatHandler;
 use crate::application::cp::CopyHandler;
 use crate::application::create::CreateHandler;
+use crate::application::defrag::DefragmentHandler;
 use crate::application::del::DeleteHandler;
 use crate::application::fmt::FormatHandler;
 use crate::application::help::HelpHandler;
@@ -33,6 +34,15 @@ lazy_static! {
             Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
             Err(..) => Config::default(),
         };
+
+        // create stdin and temp files if they don't exist
+        if !std::path::Path::new(&config.stdin_file_path).exists() {
+            std::fs::File::create(&config.stdin_file_path).expect("Unable to create stdin file");
+        }
+
+        if !std::path::Path::new(&config.temp_file_path).exists() {
+            std::fs::File::create(&config.temp_file_path).expect("Unable to create temp file");
+        }
 
         config
     };
@@ -76,6 +86,7 @@ lazy_static! {
         .add_handler(CatHandler::new(DISK_ARC.clone()))
         .add_handler(CopyHandler::new(DISK_ARC.clone()))
         .add_handler(FormatHandler::new(DISK_ARC.clone()))
+        .add_handler(DefragmentHandler::new(DISK_ARC.clone()))
         .build();
 }
 mod domain;
@@ -142,6 +153,12 @@ fn main() {
                 "Disk formatted successfully",
                 reboot_system,
                 "The system requires a reboot in order to properly persist the modifications!\nRoDOS is shutting down..."
+            ),
+            "defrag" => handle!(
+                mediator,
+                parse_defrag,
+                input.as_str(),
+                "Disk defragmented successfully"
             ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => handle!(

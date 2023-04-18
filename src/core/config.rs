@@ -9,6 +9,8 @@ pub(crate) struct Config {
     pub(crate) prompt: Prompt,
     pub(crate) commands: Commands,
     pub(crate) storage_file_path: String,
+    pub(crate) stdin_file_path: String,
+    pub(crate) temp_file_path: String,
 }
 
 impl Default for Config {
@@ -117,6 +119,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "defrag".to_string(),
+            Command {
+                name: "defrag".to_string(),
+                description: "Defragment the disk".to_string(),
+                usage: "defrag".to_string(),
+                regex: r"^\s*defrag\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),
@@ -124,6 +136,8 @@ impl Default for Config {
             prompt: Prompt::default(),
             commands,
             storage_file_path: "disk/storage.bin".to_string(),
+            stdin_file_path: "disk/stdin.in".to_string(),
+            temp_file_path: "disk/temp".to_string(),
         }
     }
 }

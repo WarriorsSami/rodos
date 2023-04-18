@@ -2,6 +2,8 @@ os = "RoDOS"
 version = "0.1.0"
 author = "Sami Barbut-Dica"
 storage_file_path = "disk/storage.bin"
+stdin_file_path = "disk/stdin.in"
+temp_file_path = "disk/temp"
 
 [prompt]
 host = "rodos"
@@ -70,3 +72,9 @@ terminator = "$"
     description = "Format the disk using the specified FAT cluster size and reboot the system"
     usage = "fmt 16/32"
     regex = "^\\s*fmt\\s+(?P<fat_type>(16|32))\\s*$"
+
+    [commands.defrag]
+    name = "defrag"
+    description = "Defragment the disk"
+    usage = "defrag"
+    regex = "^\\s*defrag\\s*$"

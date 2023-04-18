@@ -47,6 +47,7 @@ impl RequestHandler<DeleteRequest, Void> for DeleteHandler {
             Ok(mut disk_manager) => match disk_manager.delete_file(&request) {
                 Ok(_) => {
                     log::info!("Deleted file successfully");
+                    disk_manager.push_sync();
                     Ok(())
                 }
                 Err(e) => Err(e),

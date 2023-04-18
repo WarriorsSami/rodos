@@ -1,6 +1,7 @@
 use crate::application::cat::CatRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
+use crate::application::defrag::DefragmentRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::help::HelpRequest;
@@ -291,6 +292,22 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid format command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_defrag(input: &str) -> Result<DefragmentRequest, Box<dyn Error>> {
+        log::info!("Parsing defrag command...");
+
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("defrag").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("defrag").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            log::info!("Defrag command parsed successfully: {}", input);
+            Ok(DefragmentRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid defrag command syntax!").unwrap())
         }
     }
 }

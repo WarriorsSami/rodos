@@ -6,13 +6,13 @@ use crate::application::fmt::FormatRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::config::Config;
-use crate::core::content_type::ContentGenerator;
+use crate::core::content_type::{ContentGenerator, ContentType};
 use crate::core::Arm;
 use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
-use crate::CONFIG_ARC;
+use crate::{CONFIG, CONFIG_ARC};
 use chrono::Utc;
 use std::error::Error;
 use std::io::{Read, Write};
@@ -298,6 +298,13 @@ impl DiskManager {
             .unwrap();
         self.root[file_entry_index] = FileEntry::default();
     }
+
+    fn write_to_temp(file_content: &str) -> Void {
+        let mut temp_file = std::fs::File::create(CONFIG.temp_file_path.clone())?;
+        temp_file.write_all(file_content.as_bytes())?;
+
+        Ok(())
+    }
 }
 
 impl IDiskManager for DiskManager {
@@ -412,15 +419,10 @@ impl IDiskManager for DiskManager {
             }
         }
 
-        // push sync
-        self.push_sync();
-
         Ok(())
     }
 
     fn list_files(&mut self) -> Result<RootTable, Box<dyn Error>> {
-        self.pull_sync();
-
         // filter away empty entries
         let root = self
             .root
@@ -467,9 +469,6 @@ impl IDiskManager for DiskManager {
         self.root[file_entry_index].name = request.new_name.to_owned();
         self.root[file_entry_index].extension = request.new_extension.to_owned();
 
-        // push sync
-        self.push_sync();
-
         Ok(())
     }
 
@@ -498,16 +497,10 @@ impl IDiskManager for DiskManager {
         let file_entry = self.root[file_entry_index].clone();
         self.free_clusters_and_entry(&file_entry);
 
-        // push sync
-        self.push_sync();
-
         Ok(())
     }
 
     fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>> {
-        // pull sync
-        self.pull_sync();
-
         // check if the file exists in root
         if !self.root.iter().any(|file_entry| {
             file_entry.name == request.file_name && file_entry.extension == request.file_extension
@@ -541,6 +534,13 @@ impl IDiskManager for DiskManager {
             let next_cluster_index: u16 = self.fat[current_cluster].clone().into();
             current_cluster = next_cluster_index as usize;
         }
+
+        // push the remaining content
+        let remaining_content_size =
+            self.root[file_entry_index].size as usize % self.boot_sector.cluster_size as usize;
+        content.push_str(&String::from_utf8_lossy(
+            &self.storage_buffer[current_cluster][..remaining_content_size],
+        ));
 
         Ok(content)
     }
@@ -651,9 +651,6 @@ impl IDiskManager for DiskManager {
             self.storage_buffer[current_src_cluster_index].clone();
         self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
 
-        // push sync
-        self.push_sync();
-
         Ok(())
     }
 
@@ -665,6 +662,53 @@ impl IDiskManager for DiskManager {
         let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), boot_sector);
 
         // push sync the new disk representation to the storage
+        new_disk_manager.push_sync();
+
+        Ok(())
+    }
+
+    fn defragment_disk(&mut self) -> Void {
+        // create a new temporary disk representation
+        let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), self.get_boot_sector());
+
+        // iterate over the root file entries
+        for file_entry in self.root.clone().iter() {
+            // skip empty file entries
+            if file_entry.name.is_empty() {
+                continue;
+            }
+
+            // get file content
+            let cat_request =
+                CatRequest::new(file_entry.name.clone(), file_entry.extension.clone());
+            let file_content = self.get_file_content(&cat_request)?;
+
+            // write the file content to the temp buffer file
+            DiskManager::write_to_temp(file_content.as_str())?;
+
+            // create a new file entry in the new disk representation
+            let create_request = CreateRequest::new(
+                file_entry.name.clone(),
+                file_entry.extension.clone(),
+                file_content.len() as u32,
+                ContentType::Temp,
+            );
+            new_disk_manager.create_file(&create_request)?;
+
+            // sync the datetime of the old file entry to the new file entry
+            let new_file_entry = new_disk_manager
+                .root
+                .iter_mut()
+                .find(|new_file_entry| {
+                    new_file_entry.name == file_entry.name
+                        && new_file_entry.extension == file_entry.extension
+                })
+                .unwrap();
+
+            new_file_entry.updated_datetime = file_entry.updated_datetime;
+        }
+
+        // push sync
         new_disk_manager.push_sync();
 
         Ok(())

@@ -25,7 +25,7 @@ pub(crate) struct FileEntry {
     pub(crate) size: u32,
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
-    pub(crate) updated_date_time: DateTime<Utc>,
+    pub(crate) updated_datetime: DateTime<Utc>,
 }
 
 impl FileEntry {
@@ -43,7 +43,7 @@ impl FileEntry {
             size,
             first_cluster,
             attributes,
-            updated_date_time,
+            updated_datetime: updated_date_time,
         }
     }
 
@@ -54,7 +54,7 @@ impl FileEntry {
             size: 0,
             first_cluster: 0,
             attributes: 0,
-            updated_date_time: Utc::now(),
+            updated_datetime: Utc::now(),
         }
     }
 
@@ -110,7 +110,7 @@ impl Display for FileEntry {
             self.get_attributes_as_string(),
             self.name,
             self.extension,
-            self.updated_date_time,
+            self.updated_datetime,
             self.size
         )
     }
@@ -139,7 +139,7 @@ impl From<ByteArray> for FileEntry {
         let time = u16::from_be_bytes([value[18], value[19]]);
         let date = u16::from_be_bytes([value[20], value[21]]);
 
-        let updated_date_time = FileEntry::convert_u16_tuple_to_date_time((date, time));
+        let updated_datetime = FileEntry::convert_u16_tuple_to_date_time((date, time));
 
         Self {
             name,
@@ -147,7 +147,7 @@ impl From<ByteArray> for FileEntry {
             size,
             first_cluster,
             attributes,
-            updated_date_time,
+            updated_datetime,
         }
     }
 }
@@ -181,8 +181,8 @@ impl Into<ByteArray> for FileEntry {
 
         result[17] = self.attributes;
 
-        let time = self.updated_date_time.time();
-        let date = self.updated_date_time.date_naive();
+        let time = self.updated_datetime.time();
+        let date = self.updated_datetime.date_naive();
 
         let time = (time.hour() << 11) | (time.minute() << 5) | (time.second() / 2);
         let date = ((date.year() - 1980) << 9) as u32 | date.month() << 5 | date.day();

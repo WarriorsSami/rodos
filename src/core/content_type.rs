@@ -1,3 +1,4 @@
+use crate::CONFIG;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -22,15 +23,23 @@ impl ContentGenerator {
         result
     }
 
-    fn generate_stdin() -> Vec<u8> {
-        Vec::default()
+    fn generate_from_file(file_path: &str) -> Vec<u8> {
+        let mut result = Vec::new();
+
+        match std::fs::read(file_path) {
+            Ok(content) => result = content,
+            Err(e) => log::error!("Unable to read file: {}", e),
+        }
+
+        result
     }
 
     pub(crate) fn generate(content_type: ContentType, size: u32) -> Vec<u8> {
         match content_type {
             ContentType::Alpha => Self::generate_alpha(size),
             ContentType::Num => Self::generate_num(size),
-            ContentType::Stdin => Self::generate_stdin(),
+            ContentType::Stdin => Self::generate_from_file(CONFIG.stdin_file_path.as_str()),
+            ContentType::Temp => Self::generate_from_file(CONFIG.temp_file_path.as_str()),
             ContentType::Unknown => Vec::default(),
         }
     }
@@ -41,6 +50,7 @@ pub(crate) enum ContentType {
     Alpha,
     Num,
     Stdin,
+    Temp,
     Unknown,
 }
 
@@ -63,6 +73,7 @@ impl Display for ContentType {
             ContentType::Alpha => write!(f, "alpha"),
             ContentType::Num => write!(f, "num"),
             ContentType::Stdin => write!(f, "stdin"),
+            ContentType::Temp => write!(f, "temp"),
             ContentType::Unknown => write!(f, "unknown"),
         }
     }

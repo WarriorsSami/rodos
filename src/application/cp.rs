@@ -52,6 +52,7 @@ impl RequestHandler<CopyRequest, Void> for CopyHandler {
                         request.dest_name,
                         request.dest_extension
                     );
+                    disk_manager.push_sync();
                     Ok(())
                 }
                 Err(e) => Err(e),
