@@ -106,9 +106,9 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
   ```
   - set the attribute of a file entry in the ROOT directory
   - possible attributes: hidden, read-only, read-write, system, folder/file
-- **format** `fat_type` - format the disk:
+- **fmt** `fat_type` - format the disk:
   ```bash
-  rouser@rodos:~$ format fat32
+  rouser@rodos:~$ fmt 32
   
   Disk formatted
   ```
