@@ -35,9 +35,9 @@ impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
     fn handle(&mut self, _event: NeofetchRequest) -> Void {
         log::info!("Showing OS specifications...");
 
-        match self.config.lock() {
-            Ok(config) => {
-                let boot_sector = self.disk_manager.lock().unwrap().get_boot_sector();
+        match (self.config.lock(), self.disk_manager.lock()) {
+            (Ok(config), Ok(disk_manager)) => {
+                let boot_sector = disk_manager.get_boot_sector();
 
                 cprintln!("<bold>
                     <w!>WWWWWWWWWWWX</><c!>Okk0</><w!>XWWXXK</><c!>00000</><w!>KNWWWWWWWWWWW</>            <w!>{}</><b!>{}</><w!>{}</>
@@ -76,7 +76,7 @@ impl RequestHandler<NeofetchRequest, Void> for NeofetchHandler {
 
                 Ok(())
             }
-            Err(_) => Err(Box::try_from("Unable to lock config").unwrap()),
+            _ => Err(Box::try_from("Unable to lock config").unwrap()),
         }
     }
 }
