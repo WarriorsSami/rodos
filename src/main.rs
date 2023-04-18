@@ -2,6 +2,7 @@ use crate::application::cat::CatHandler;
 use crate::application::cp::CopyHandler;
 use crate::application::create::CreateHandler;
 use crate::application::del::DeleteHandler;
+use crate::application::fmt::FormatHandler;
 use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
@@ -9,6 +10,7 @@ use crate::application::rename::RenameHandler;
 use crate::core::cli_parser::CliParser;
 use crate::core::config::Config;
 use crate::core::Arm;
+use crate::domain::boot_sector::BootSector;
 use crate::domain::i_disk_manager::IDiskManager;
 use crate::infrastructure::disk_manager::DiskManager;
 use color_print::{cprint, cprintln};
@@ -22,9 +24,6 @@ use std::sync::{Arc, Mutex};
 
 mod application;
 mod core;
-mod domain;
-mod infrastructure;
-
 // config
 lazy_static! {
     pub(crate) static ref CONFIG: Config = {
@@ -39,9 +38,9 @@ lazy_static! {
     };
     pub(crate) static ref CONFIG_ARC: Arm<Config> = Arc::new(Mutex::new(CONFIG.clone()));
     pub(crate) static ref DISK_ARC: Arm<dyn IDiskManager> = {
-        let mut disk_manager = DiskManager::new(CONFIG_ARC.clone());
+        let mut disk_manager = DiskManager::new(CONFIG_ARC.clone(), BootSector::default());
 
-        // if storage file doesn't exist, is empty or tampered, create new storage file based on in-memory config
+        // if storage file doesn't exist or is empty, create new storage file based on in-memory config
         // otherwise, init disk manager from storage file
         let storage_file_exists = std::path::Path::new(&CONFIG.storage_file_path).exists();
         if !storage_file_exists {
@@ -51,10 +50,17 @@ lazy_static! {
                 .expect("Unable to get storage file metadata")
                 .len();
 
-            if storage_file_size != disk_manager.get_total_space() {
+            if storage_file_size == 0 {
                 disk_manager.push_sync();
             } else {
-                disk_manager.pull_sync();
+                disk_manager.pull_sync(); // grab the boot sector from the storage file
+
+                // create new disk manager according to the boot sector from the storage file
+                // this is necessary in order to tackle the inconsistencies between the in-memory
+                // data structures used to represent the disk when switching between FAT16 and FAT32
+                disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector());
+
+                disk_manager.pull_sync(); // grab the rest of the data from the storage file
             }
         }
 
@@ -69,8 +75,12 @@ lazy_static! {
         .add_handler(DeleteHandler::new(DISK_ARC.clone()))
         .add_handler(CatHandler::new(DISK_ARC.clone()))
         .add_handler(CopyHandler::new(DISK_ARC.clone()))
+        .add_handler(FormatHandler::new(DISK_ARC.clone()))
         .build();
 }
+mod domain;
+
+mod infrastructure;
 
 fn main() {
     init_logger();
@@ -125,21 +135,23 @@ fn main() {
                 input.as_str(),
                 "File copied successfully!"
             ),
+            "fmt" => handle!(
+                mediator,
+                parse_fmt,
+                input.as_str(),
+                "Disk formatted successfully",
+                reboot_system,
+                "The system requires a reboot in order to properly persist the modifications!\nRoDOS is shutting down..."
+            ),
             "help" => handle!(mediator, parse_help, input.as_str()),
-            "exit" => match CliParser::parse_exit(input.as_str()) {
-                Ok(_) => {
-                    warn!("RoDOS is shutting down...");
-
-                    log::info!("RoDOS is booting down...");
-                    std::process::exit(0);
-                }
-                Err(err) => {
-                    warn!(err);
-                    log::warn!("{}", err);
-                }
-            },
+            "exit" => handle!(
+                parse_exit,
+                input.as_str(),
+                reboot_system,
+                "RoDOS is shutting down..."
+            ),
             _ => {
-                warn!("Command not found!");
+                warn!("Warning: Command not found!");
             }
         }
     }
@@ -174,4 +186,11 @@ fn init_logger() {
             log4rs::init_config(log_config).unwrap();
         }
     }
+}
+
+fn reboot_system(bye_message: &str) {
+    warn!("Warning: {}", bye_message);
+
+    log::info!("RoDOS is shutting down...");
+    std::process::exit(0);
 }

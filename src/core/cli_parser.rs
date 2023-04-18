@@ -2,6 +2,7 @@ use crate::application::cat::CatRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
+use crate::application::fmt::FormatRequest;
 use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
 use crate::application::neofetch::NeofetchRequest;
@@ -271,6 +272,25 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid copy command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_fmt(input: &str) -> Result<FormatRequest, Box<dyn Error>> {
+        log::info!("Parsing fmt command...");
+
+        let regex = regex::Regex::new(CONFIG.commands.get("fmt").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("fmt").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let fat_type = captures.name("fat_type").unwrap().as_str();
+            let fat_type = fat_type.parse::<u16>()?;
+
+            log::info!("Format command parsed successfully: {}", input);
+            Ok(FormatRequest::new(fat_type))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid format command syntax!").unwrap())
         }
     }
 }
