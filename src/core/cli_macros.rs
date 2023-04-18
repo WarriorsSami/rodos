@@ -27,24 +27,27 @@ macro_rules! prompt {
 /// macro `error!` for printing error messages to stdout
 #[macro_export]
 macro_rules! error {
-    ($($arg:tt)+) => {
-        cprintln!("<r!>Error: {}</>", $($arg)+);
+    ($fmt:expr $(, $arg:tt)*) => {
+        let s = format!($fmt $(, $arg)*);
+        cprintln!("<r!>{}</>", s);
     };
 }
 
 /// macro `success!` for printing success messages to stdout
 #[macro_export]
 macro_rules! success {
-    ($($arg:tt)+) => {
-        cprintln!("<g!>{}</>", $($arg)+);
+    ($fmt:expr $(, $arg:tt)*) => {
+        let s = format!($fmt $(, $arg)*);
+        cprintln!("<g!>{}</>", s);
     };
 }
 
 /// macro `warn!` for printing warning messages to stdout
 #[macro_export]
 macro_rules! warn {
-    ($($arg:tt)+) => {
-        cprintln!("<y!>Warning: {}</>", $($arg)+);
+    ($fmt:expr $(, $arg:tt)*) => {
+        let s = format!($fmt $(, $arg)*);
+        cprintln!("<y!>{}</>", s);
     };
 }
 
@@ -64,29 +67,60 @@ macro_rules! handle {
         match CliParser::$parser_fn($input) {
             Ok(request) => {
                 if let Err(err) = $mediator.send(request).unwrap() {
-                    error!(err);
+                    error!("Error: {}", err);
                     log::error!("mediator_level: {}", err);
                 }
             }
             Err(err) => {
-                warn!(err);
+                warn!("Warning: {}", err);
                 log::warn!("parser_level: {}", err);
             }
         }
     };
+
     ($mediator:tt, $parser_fn:tt, $input:expr, $success:expr) => {
         match CliParser::$parser_fn($input) {
             Ok(request) => {
                 if let Err(err) = $mediator.send(request).unwrap() {
-                    error!(err);
+                    error!("Error: {}", err);
                     log::error!("mediator_level: {}", err);
                 } else {
-                    success!($success);
+                    success!("{}", $success);
                     log::info!("{}", $success);
                 }
             }
             Err(err) => {
-                warn!(err);
+                warn!("Warning: {}", err);
+                log::warn!("parser_level: {}", err);
+            }
+        }
+    };
+
+    ($mediator:tt, $parser_fn:tt, $input:expr, $success:expr, $call_back_fn:tt $(, $arg:tt)*) => {
+        match CliParser::$parser_fn($input) {
+            Ok(request) => {
+                if let Err(err) = $mediator.send(request).unwrap() {
+                    error!("Error: {}", err);
+                    log::error!("mediator_level: {}", err);
+                } else {
+                    success!("{}", $success);
+                    log::info!("{}", $success);
+
+                    $call_back_fn($($arg)*);
+                }
+            }
+            Err(err) => {
+                warn!("Warning: {}", err);
+                log::warn!("parser_level: {}", err);
+            }
+        }
+    };
+
+    ($parser_fn:tt, $input:expr, $call_back_fn:tt $(, $arg:tt)*) => {
+        match CliParser::$parser_fn($input) {
+            Ok(_) => $call_back_fn($($arg)*),
+            Err(err) => {
+                warn!("Warning: {}", err);
                 log::warn!("parser_level: {}", err);
             }
         }
