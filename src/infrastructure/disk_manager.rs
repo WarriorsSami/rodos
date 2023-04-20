@@ -516,7 +516,7 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        // rename the file in root
+        // get the index of the file entry in root
         let file_entry_index = self
             .root
             .iter()
@@ -525,6 +525,16 @@ impl IDiskManager for DiskManager {
             })
             .unwrap();
 
+        // check if the file is read only
+        if self.root[file_entry_index].is_read_only() {
+            return Err(Box::try_from(format!(
+                "File {}.{} is read only",
+                request.old_name, request.old_extension
+            ))
+            .unwrap());
+        }
+
+        // rename the file in root
         self.root[file_entry_index].name = request.new_name.to_owned();
         self.root[file_entry_index].extension = request.new_extension.to_owned();
 
@@ -543,7 +553,7 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        // delete the file in root and free the cluster chain in fat
+        // get the file entry index in root
         let file_entry_index = self
             .root
             .iter()
@@ -553,6 +563,16 @@ impl IDiskManager for DiskManager {
             })
             .unwrap_or_default();
 
+        // check if it is read only
+        if self.root[file_entry_index].is_read_only() {
+            return Err(Box::try_from(format!(
+                "File {}.{} is read only",
+                request.file_name, request.file_extension
+            ))
+            .unwrap());
+        }
+
+        // delete the file in root and free the cluster chain in fat
         let file_entry = self.root[file_entry_index].clone();
         self.free_clusters_and_entry(&file_entry);
 
