@@ -36,6 +36,7 @@ lazy_static! {
         };
 
         // create stdin and temp files if they don't exist
+        // stdin support is not currently implemented
         if !std::path::Path::new(&config.stdin_file_path).exists() {
             std::fs::File::create(&config.stdin_file_path).expect("Unable to create stdin file");
         }
@@ -63,11 +64,11 @@ lazy_static! {
             if storage_file_size == 0 {
                 disk_manager.push_sync();
             } else {
-                disk_manager.pull_sync(); // grab the boot sector from the storage file
+                disk_manager.pull_boot_sector_sync(); // grab the boot sector from the storage file
 
                 // create new disk manager according to the boot sector from the storage file
                 // this is necessary in order to tackle the inconsistencies between the in-memory
-                // data structures used to represent the disk when switching between FAT16 and FAT32
+                // data structures used to represent the disk when switching between FAT16 and FAT32 and vice-versa
                 disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector());
 
                 disk_manager.pull_sync(); // grab the rest of the data from the storage file

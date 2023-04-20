@@ -210,7 +210,7 @@ impl DiskManager {
         });
     }
 
-    fn sync_from_buffer(&mut self) {
+    fn sync_from_buffer(&mut self, only_boot_sector: bool) {
         self.sync_from_file();
 
         // sync boot sector from storage buffer
@@ -224,6 +224,10 @@ impl DiskManager {
             .collect();
 
         self.boot_sector = BootSector::from(boot_sector_data);
+
+        if only_boot_sector {
+            return;
+        }
 
         // sync fat from storage buffer
         let fat_clusters = self.boot_sector.fat_cell_size as usize * self.fat.len()
@@ -313,7 +317,11 @@ impl IDiskManager for DiskManager {
     }
 
     fn pull_sync(&mut self) {
-        self.sync_from_buffer();
+        self.sync_from_buffer(false);
+    }
+
+    fn pull_boot_sector_sync(&mut self) {
+        self.sync_from_buffer(true);
     }
 
     fn create_file(&mut self, request: &CreateRequest) -> Void {
@@ -657,7 +665,10 @@ impl IDiskManager for DiskManager {
     fn format_disk(&mut self, request: &FormatRequest) -> Void {
         // create a new in memory disk representation associated with the new fat type
         let mut boot_sector = self.get_boot_sector();
+        let disk_size = boot_sector.cluster_size as u32 * boot_sector.cluster_count as u32;
+
         boot_sector.cluster_size = request.fat_type;
+        boot_sector.cluster_count = (disk_size / (boot_sector.cluster_size as u32)) as u16;
 
         let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), boot_sector);
 

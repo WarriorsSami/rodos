@@ -14,7 +14,7 @@ impl Default for BootSector {
     fn default() -> Self {
         Self {
             cluster_size: 16,
-            cluster_count: 4096,
+            cluster_count: 8192,
             root_entry_cell_size: 32,
             root_entry_count: 64,
             fat_cell_size: 2,
