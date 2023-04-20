@@ -8,10 +8,12 @@ use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
 use crate::application::neofetch::NeofetchRequest;
 use crate::application::rename::RenameRequest;
+use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
 use crate::core::content_type::ContentType;
 use crate::core::filter_type::FilterType;
 use crate::core::sort_type::SortType;
+use crate::domain::file_entry::FileEntryAttributes;
 use crate::{info, CONFIG};
 use color_print::cprintln;
 use std::error::Error;
@@ -346,6 +348,47 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid defrag command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_setattr(input: &str) -> Result<SetAttributesRequest, Box<dyn Error>> {
+        log::info!("Parsing setattr command...");
+
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("setattr").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("setattr").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+            let extension = captures.name("extension");
+            let attributes = captures.name("attributes").unwrap().as_str();
+
+            let extension = match extension {
+                Some(extension) => extension.as_str(),
+                None => "",
+            };
+
+            let attributes = attributes
+                .chars()
+                .collect::<Vec<_>>()
+                .chunks(2)
+                .map(|chunk| chunk.iter().collect::<String>())
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|attr_str| attr_str.parse::<FileEntryAttributes>().unwrap())
+                .collect::<Vec<_>>()
+                .iter()
+                .fold(0, |state, attr| state | *attr as u8);
+
+            Ok(SetAttributesRequest::new(
+                name.to_string(),
+                extension.to_string(),
+                attributes,
+            ))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid setattr command syntax!").unwrap())
         }
     }
 }

@@ -129,6 +129,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "setattr".to_string(),
+            Command {
+                name: "setattr".to_string(),
+                description: "Set the attributes of a file or a directory".to_string(),
+                usage: "setattr <file_name>.<file_extension> <attributes>(max 2 blocks, e.g. +w-h, but not +w-h+h)\n<attributes>:\n\t+w: make read-write\n\t-w: make read-only\n\t+h: make hidden\n\t-h: make visible".to_string(),
+                regex: r"^\s*setattr\s+(?P<name>[a-zA-Z0-9_]+)(\.(?P<extension>\S+))?\s+(?P<attributes>((\+|-)(w|h)){1,2})\s*$".to_string(),
+            }
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

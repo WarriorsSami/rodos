@@ -8,6 +8,7 @@ use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
 use crate::application::neofetch::NeofetchHandler;
 use crate::application::rename::RenameHandler;
+use crate::application::setattr::SetAttributesHandler;
 use crate::core::cli_parser::CliParser;
 use crate::core::config::Config;
 use crate::core::Arm;
@@ -88,6 +89,7 @@ lazy_static! {
         .add_handler(CopyHandler::new(DISK_ARC.clone()))
         .add_handler(FormatHandler::new(DISK_ARC.clone()))
         .add_handler(DefragmentHandler::new(DISK_ARC.clone()))
+        .add_handler(SetAttributesHandler::new(DISK_ARC.clone()))
         .build();
 }
 mod domain;
@@ -146,6 +148,12 @@ fn main() {
                 parse_cp,
                 input.as_str(),
                 "File copied successfully!"
+            ),
+            "setattr" => handle!(
+                mediator,
+                parse_setattr,
+                input.as_str(),
+                "File attributes set successfully!"
             ),
             "fmt" => handle!(
                 mediator,

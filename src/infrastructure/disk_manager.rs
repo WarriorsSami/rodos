@@ -5,6 +5,7 @@ use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::ls::ListRequest;
 use crate::application::rename::RenameRequest;
+use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
 use crate::core::config::Config;
 use crate::core::content_type::{ContentGenerator, ContentType};
@@ -434,9 +435,6 @@ impl IDiskManager for DiskManager {
     }
 
     fn list_files(&mut self, request: &ListRequest) -> Result<RootTable, Box<dyn Error>> {
-        println!("{:?}", request.filters);
-        println!("{:?}", request.sort);
-
         // filter away empty entries
         let mut file_entries: RootTable = self
             .root
@@ -711,6 +709,37 @@ impl IDiskManager for DiskManager {
         self.storage_buffer[current_dest_cluster_index] =
             self.storage_buffer[current_src_cluster_index].clone();
         self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
+
+        Ok(())
+    }
+
+    fn set_attributes(&mut self, request: &SetAttributesRequest) -> Void {
+        // check if the file exists
+        if !self.root.iter().any(|file_entry| {
+            file_entry.name == request.name && file_entry.extension == request.extension
+        }) {
+            return Err(Box::try_from(format!(
+                "File {}.{} does not exist",
+                request.name, request.extension
+            ))
+            .unwrap());
+        }
+
+        // get the file entry
+        let file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| {
+                file_entry.name == request.name && file_entry.extension == request.extension
+            })
+            .unwrap_or_default();
+
+        // set the attributes
+        // persist the file entry type (file or folder)
+        // as the attributes from the request are only related to hidden or read only flags
+        let file_entry_type_attr =
+            self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
+        self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
 
         Ok(())
     }

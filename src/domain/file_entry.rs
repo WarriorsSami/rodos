@@ -2,9 +2,11 @@ use crate::infrastructure::disk_manager::ByteArray;
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use std::fmt::Display;
 use std::ops::BitOr;
+use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum FileEntryAttributes {
+    Implicit = 0x00,
     ReadOnly = 0x01,
     Hidden = 0x02,
     File = 0x04,
@@ -15,6 +17,18 @@ impl BitOr for FileEntryAttributes {
 
     fn bitor(self, rhs: Self) -> Self::Output {
         self as u8 | rhs as u8
+    }
+}
+
+impl FromStr for FileEntryAttributes {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "-w" => Ok(FileEntryAttributes::ReadOnly),
+            "+h" => Ok(FileEntryAttributes::Hidden),
+            _ => Ok(FileEntryAttributes::Implicit),
+        }
     }
 }
 

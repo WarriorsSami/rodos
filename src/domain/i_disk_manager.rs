@@ -5,6 +5,7 @@ use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::ls::ListRequest;
 use crate::application::rename::RenameRequest;
+use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
 use crate::domain::boot_sector::BootSector;
 use crate::domain::file_entry::RootTable;
@@ -73,6 +74,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the source file does not exist or a file with the same name as the destination file already exists.
     fn copy_file(&mut self, request: &CopyRequest) -> Void;
+
+    /// Set attributes for a given file or directory.
+    /// ## Arguments
+    /// * `request` - The request containing the file/directory name and the attributes to set.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the file/directory does not exist.
+    fn set_attributes(&mut self, request: &SetAttributesRequest) -> Void;
 
     /// Formats the disk
     /// ## Arguments

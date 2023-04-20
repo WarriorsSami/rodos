@@ -59,7 +59,11 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                         cprintln!("<g!>Free space:</> {} B", disk_manager.get_free_space());
                         cprintln!("<g!>Total space:</> {} B", disk_manager.get_total_space());
 
-                        log::info!("Listed files successfully");
+                        log::info!(
+                            "Listed files successfully with filters: {:?} and sort: {:?}",
+                            request.filters,
+                            request.sort
+                        );
                         Ok(())
                     }
                     Err(e) => Err(e),

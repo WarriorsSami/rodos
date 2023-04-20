@@ -10,5 +10,6 @@ pub(crate) mod help;
 pub(crate) mod ls;
 pub(crate) mod neofetch;
 pub(crate) mod rename;
+pub(crate) mod setattr;
 
 pub(crate) type Void = Result<(), Box<dyn Error>>;
