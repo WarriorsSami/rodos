@@ -12,7 +12,6 @@ lazy_static = "1.4.0"
 log = "0.4.17"
 log4rs = "1.2.0"
 mediator = "0.2.2"
-rand = "0.8.5"
 regex = "1.7.3"
 serde = { version = "1.0.159", features = ["derive"] }
 tokio = { version = "1.27.0", features = ["full"] }

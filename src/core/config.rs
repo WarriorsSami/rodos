@@ -52,8 +52,8 @@ impl Default for Config {
             Command {
                 name: "create".to_string(),
                 description: "Create a new file".to_string(),
-                usage: "create <file_name>.<file_extension> <file_size> <file_content_type>".to_string(),
-                regex: r"^\s*create\s+(?P<name>\S+)\.(?P<extension>\S+)\s+(?P<dim>\d+)\s+(?P<type>\S+)\s*$".to_string(),
+                usage: "create <file_name>.<file_extension> <file_size> -<file_content_type>".to_string(),
+                regex: r"^\s*create\s+(?P<name>\S+)\.(?P<extension>\S+)\s+(?P<dim>\d+)\s+-(?P<type>\S+)\s*$".to_string(),
             },
         );
 
