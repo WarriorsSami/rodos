@@ -10,6 +10,8 @@ use crate::application::neofetch::NeofetchRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::content_type::ContentType;
+use crate::core::filter_type::FilterType;
+use crate::core::sort_type::SortType;
 use crate::{info, CONFIG};
 use color_print::cprintln;
 use std::error::Error;
@@ -120,11 +122,47 @@ impl CliParser {
         log::info!("Parsing ls command...");
 
         let regex = regex::Regex::new(CONFIG.commands.get("ls").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
         let usage = CONFIG.commands.get("ls").unwrap().usage.as_str();
 
-        if regex.is_match(input) {
+        if let Some(captures) = captures {
+            let filter_basic = captures.name("filter_basic");
+            let filter_name = captures.name("filter_name");
+            let filter_extension = captures.name("filter_extension");
+            let sort = captures.name("sort");
+
+            let mut filters: Vec<FilterType> = Vec::new();
+
+            if let Some(filter_basic) = filter_basic {
+                let filter_basic = filter_basic.as_str();
+                filters.append(
+                    filter_basic
+                        .chars()
+                        .map(FilterType::from)
+                        .collect::<Vec<FilterType>>()
+                        .as_mut(),
+                );
+            }
+
+            if let Some(filter_name) = filter_name {
+                let filter_name = filter_name.as_str();
+                filters.push(FilterType::Name(filter_name.to_string()));
+            }
+
+            if let Some(filter_extension) = filter_extension {
+                let filter_extension = filter_extension.as_str();
+                filters.push(FilterType::Extension(filter_extension.to_string()));
+            }
+
+            let mut sort_option: Option<SortType> = None;
+
+            if let Some(sort) = sort {
+                let sort = sort.as_str();
+                sort_option = Some(SortType::from(sort));
+            }
+
             log::info!("Ls command parsed successfully!");
-            Ok(ListRequest::new())
+            Ok(ListRequest::new(filters, sort_option))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid ls command syntax!").unwrap())

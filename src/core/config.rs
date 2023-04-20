@@ -61,9 +61,9 @@ impl Default for Config {
             "ls".to_string(),
             Command {
                 name: "ls".to_string(),
-                description: "List files and directories from the current directory".to_string(),
-                usage: "ls".to_string(),
-                regex: r"^\s*ls\s*$".to_string(),
+                description: "List files and directories from the current directory by applying given filters and sorting options".to_string(),
+                usage: "ls [-<filter>] [-name=<file_name>] [-ext=<file_extension>] [-<sort>]\n-<filter>:\n\t-a: show all visible files and directories\n\t-h: show all files and directories including hidden ones\n\t-s: show files and directories in short format (name and extension)\n\t-l: show files and directories in detailed format (attributes, name, extension, last modification date and size in bytes)\n\t-f: show all files\n\t-d: show all directories\n-<sort>:\n\t-n: sort by name\n\t-t: sort by last modification date\n\t-sz: sort by size\n\t-*a: sort in ascending order\n\t-*d: sort in descending order".to_string(),
+                regex: r"^\s*ls(\s+-(?P<filter_basic>(a|h)(s|l)?(f|d)?))?(\s+-name=(?P<filter_name>\S+))?(\s+-ext=(?P<filter_extension>\S+))?(\s+-(?P<sort>(n|t|sz)(a|d)))?\s*$".to_string(),
             },
         );
 

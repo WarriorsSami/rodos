@@ -3,6 +3,7 @@ use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
+use crate::application::ls::ListRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::domain::boot_sector::BootSector;
@@ -39,9 +40,11 @@ pub(crate) trait IDiskManager: Sync + Send {
     fn create_file(&mut self, request: &CreateRequest) -> Void;
 
     /// List all the files from the working directory
+    /// ## Arguments
+    /// * `request` - The request containing the filters and the sort type.
     /// ## Errors
     /// * `Box<dyn Error>` - If the disk manager is not able to sync with the storage file.
-    fn list_files(&mut self) -> Result<RootTable, Box<dyn Error>>;
+    fn list_files(&mut self, request: &ListRequest) -> Result<RootTable, Box<dyn Error>>;
 
     /// Renames a file with the given name.
     /// ## Arguments

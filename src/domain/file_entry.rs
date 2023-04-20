@@ -25,7 +25,7 @@ pub(crate) struct FileEntry {
     pub(crate) size: u32,
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
-    pub(crate) updated_datetime: DateTime<Utc>,
+    pub(crate) last_modification_datetime: DateTime<Utc>,
 }
 
 impl FileEntry {
@@ -35,7 +35,7 @@ impl FileEntry {
         size: u32,
         first_cluster: u16,
         attributes: u8,
-        updated_date_time: DateTime<Utc>,
+        last_modification_datetime: DateTime<Utc>,
     ) -> Self {
         Self {
             name,
@@ -43,7 +43,7 @@ impl FileEntry {
             size,
             first_cluster,
             attributes,
-            updated_datetime: updated_date_time,
+            last_modification_datetime,
         }
     }
 
@@ -54,7 +54,7 @@ impl FileEntry {
             size: 0,
             first_cluster: 0,
             attributes: 0,
-            updated_datetime: Utc::now(),
+            last_modification_datetime: Utc::now(),
         }
     }
 
@@ -100,6 +100,18 @@ impl FileEntry {
         )
         .unwrap()
     }
+
+    pub(crate) fn is_file(&self) -> bool {
+        self.attributes & FileEntryAttributes::File as u8 != 0
+    }
+
+    pub(crate) fn is_hidden(&self) -> bool {
+        self.attributes & FileEntryAttributes::Hidden as u8 != 0
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        self.attributes & FileEntryAttributes::ReadOnly as u8 != 0
+    }
 }
 
 impl Display for FileEntry {
@@ -110,7 +122,7 @@ impl Display for FileEntry {
             self.get_attributes_as_string(),
             self.name,
             self.extension,
-            self.updated_datetime,
+            self.last_modification_datetime,
             self.size
         )
     }
@@ -147,7 +159,7 @@ impl From<ByteArray> for FileEntry {
             size,
             first_cluster,
             attributes,
-            updated_datetime,
+            last_modification_datetime: updated_datetime,
         }
     }
 }
@@ -181,8 +193,8 @@ impl Into<ByteArray> for FileEntry {
 
         result[17] = self.attributes;
 
-        let time = self.updated_datetime.time();
-        let date = self.updated_datetime.date_naive();
+        let time = self.last_modification_datetime.time();
+        let date = self.last_modification_datetime.date_naive();
 
         let time = (time.hour() << 11) | (time.minute() << 5) | (time.second() / 2);
         let date = ((date.year() - 1980) << 9) as u32 | date.month() << 5 | date.day();

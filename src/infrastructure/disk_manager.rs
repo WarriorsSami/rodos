@@ -3,10 +3,13 @@ use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
+use crate::application::ls::ListRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::Void;
 use crate::core::config::Config;
 use crate::core::content_type::{ContentGenerator, ContentType};
+use crate::core::filter_type::FilterType;
+use crate::core::sort_type::SortType;
 use crate::core::Arm;
 use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
@@ -430,16 +433,66 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    fn list_files(&mut self) -> Result<RootTable, Box<dyn Error>> {
+    fn list_files(&mut self, request: &ListRequest) -> Result<RootTable, Box<dyn Error>> {
+        println!("{:?}", request.filters);
+        println!("{:?}", request.sort);
+
         // filter away empty entries
-        let root = self
+        let mut file_entries: RootTable = self
             .root
             .iter()
             .filter(|&file_entry| !file_entry.name.is_empty())
             .cloned()
             .collect();
 
-        Ok(root)
+        // apply filters if any
+        if !request.filters.is_empty() {
+            file_entries.retain(|file_entry| {
+                request.filters.iter().all(|filter| match filter {
+                    FilterType::Name(name) => file_entry.name == *name,
+                    FilterType::Extension(extension) => file_entry.extension == *extension,
+                    FilterType::Files => file_entry.is_file(),
+                    FilterType::Directories => !file_entry.is_file(),
+                    FilterType::All => !file_entry.is_hidden(),
+                    _ => true,
+                })
+            });
+        } else {
+            // as default, filter away hidden files
+            file_entries.retain(|file_entry| !file_entry.is_hidden());
+        }
+
+        // apply sort if any
+        if let Some(sort) = &request.sort {
+            match &sort {
+                SortType::NameAsc => {
+                    file_entries.sort_by(|a, b| a.name.cmp(&b.name));
+                }
+                SortType::NameDesc => {
+                    file_entries.sort_by(|a, b| b.name.cmp(&a.name));
+                }
+                SortType::DateAsc => {
+                    file_entries.sort_by(|a, b| {
+                        a.last_modification_datetime
+                            .cmp(&b.last_modification_datetime)
+                    });
+                }
+                SortType::DateDesc => {
+                    file_entries.sort_by(|a, b| {
+                        b.last_modification_datetime
+                            .cmp(&a.last_modification_datetime)
+                    });
+                }
+                SortType::SizeAsc => {
+                    file_entries.sort_by(|a, b| a.size.cmp(&b.size));
+                }
+                SortType::SizeDesc => {
+                    file_entries.sort_by(|a, b| b.size.cmp(&a.size));
+                }
+            }
+        }
+
+        Ok(file_entries)
     }
 
     fn rename_file(&mut self, request: &RenameRequest) -> Void {
@@ -716,7 +769,7 @@ impl IDiskManager for DiskManager {
                 })
                 .unwrap();
 
-            new_file_entry.updated_datetime = file_entry.updated_datetime;
+            new_file_entry.last_modification_datetime = file_entry.last_modification_datetime;
         }
 
         // push sync
