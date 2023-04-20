@@ -16,8 +16,8 @@ terminator = "$"
     [commands.help]
     name = "help"
     description = "Display the list of available commands"
-    usage = "help"
-    regex = "^\\s*help\\s*$"
+    usage = "help [command]"
+    regex = "^\\s*help(\\s+(?P<command>\\S+))?\\s*$"
 
     [commands.exit]
     name = "exit"

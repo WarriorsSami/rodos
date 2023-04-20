@@ -22,8 +22,8 @@ impl Default for Config {
             Command {
                 name: "help".to_string(),
                 description: "Display the list of available commands".to_string(),
-                usage: "help".to_string(),
-                regex: r"^\s*help\s*$".to_string(),
+                usage: "help [command]".to_string(),
+                regex: r"^\s*help(\s+(?P<command>\S+))?\s*$".to_string(),
             },
         );
 

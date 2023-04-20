@@ -25,11 +25,16 @@ impl CliParser {
         log::info!("Parsing help command...");
 
         let regex = regex::Regex::new(CONFIG.commands.get("help").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input).unwrap();
         let usage = CONFIG.commands.get("help").unwrap().usage.as_str();
 
         if regex.is_match(input) {
             log::info!("Help command parsed successfully!");
-            Ok(HelpRequest::new())
+
+            let command = captures.name("command");
+            let command = command.map(|command| command.as_str().to_string());
+
+            Ok(HelpRequest::new(command))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid help command syntax!").unwrap())
