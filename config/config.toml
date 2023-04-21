@@ -1,6 +1,7 @@
 os = "RoDOS"
 version = "0.1.0"
 author = "Sami Barbut-Dica"
+disk_dir_path = "disk"
 storage_file_path = "disk/storage.bin"
 stdin_file_path = "disk/stdin.in"
 temp_file_path = "disk/temp"

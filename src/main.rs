@@ -35,6 +35,11 @@ lazy_static! {
             Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
             Err(..) => Config::default(),
         };
+        
+        // create disk folder if it doesn't exist
+        if !std::path::Path::new(&config.disk_dir_path).exists() {
+            std::fs::create_dir(&config.disk_dir_path).expect("Unable to create disk folder");
+        }
 
         // create stdin and temp files if they don't exist
         // stdin support is not currently implemented
