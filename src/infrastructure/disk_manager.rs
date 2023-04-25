@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
@@ -264,16 +265,17 @@ impl DiskManager {
         let clusters_per_root_entry =
             self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size;
 
-        self.storage_buffer
+        let root_table: RootTable = self
+            .storage_buffer
             .iter()
             .skip(boot_sector_clusters + fat_clusters)
             .collect::<Vec<_>>()
             .chunks(clusters_per_root_entry as usize)
-            .zip(self.root.iter_mut())
-            .for_each(|(cluster, file_entry)| {
+            .take(self.root.len())
+            .map(|cluster| {
                 let cluster_is_empty = cluster[0].iter().all(|byte| *byte == 0);
 
-                *file_entry = match cluster_is_empty {
+                match cluster_is_empty {
                     false => {
                         let mut file_entry_data: ByteArray = Vec::new();
 
@@ -282,11 +284,76 @@ impl DiskManager {
                             file_entry_data.extend_from_slice(cluster[1]);
                         }
 
-                        FileEntry::from(file_entry_data)
+                        let mut file_entry_result = FileEntry::from(file_entry_data);
+                        file_entry_result.parent_entry =
+                            Some(Box::new((FileEntry::root(), "/".to_string())));
+
+                        if file_entry_result.is_file() {
+                            file_entry_result
+                        } else {
+                            // TODO: handle directory, i.e. attach the directory tree (recursive parent/children)
+                            file_entry_result.children_entries =
+                                Some(self.get_directory_root_table(&file_entry_result));
+                            file_entry_result
+                        }
                     }
                     true => FileEntry::default(),
-                };
-            });
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.root = root_table;
+        if self.working_directory.name == "/" {
+            self.working_directory.children_entries = Some(self.root.clone());
+        }
+    }
+
+    fn get_directory_root_table(&self, directory_entry: &FileEntry) -> RootTable {
+        let mut root_table = RootTable::default();
+
+        let mut current_cluster_index = directory_entry.first_cluster;
+        while self.fat[current_cluster_index as usize] != FatValue::EndOfChain {
+            let mut file_entry_data: ByteArray = self
+                .storage_buffer
+                .get(current_cluster_index as usize)
+                .unwrap()
+                .to_vec();
+
+            // check if the file entry is split across multiple clusters
+            if self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size != 1 {
+                current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
+                let file_entry_data_next_cluster: ByteArray = self
+                    .storage_buffer
+                    .get(current_cluster_index as usize)
+                    .unwrap()
+                    .to_vec();
+                file_entry_data.extend_from_slice(&file_entry_data_next_cluster);
+            }
+
+            let mut file_entry_result = FileEntry::from(file_entry_data);
+            file_entry_result.parent_entry = Some(Box::new((
+                directory_entry.clone(),
+                directory_entry.name.clone(),
+            )));
+
+            if file_entry_result.is_file()
+                || (!file_entry_result.is_file()
+                    && (file_entry_result.name == "." || file_entry_result.name == ".."))
+            {
+                root_table.push(file_entry_result);
+            } else {
+                file_entry_result.children_entries =
+                    Some(self.get_directory_root_table(&file_entry_result));
+                root_table.push(file_entry_result);
+            }
+
+            current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
+            if FatValue::from(current_cluster_index) == FatValue::EndOfChain {
+                break;
+            }
+        }
+
+        root_table
     }
 
     fn free_clusters_and_entry(&mut self, file_entry: &FileEntry) {
@@ -313,6 +380,10 @@ impl DiskManager {
         temp_file.write_all(file_content.as_bytes())?;
 
         Ok(())
+    }
+
+    fn get_root_table_for_working_directory(&self) -> RootTable {
+        self.working_directory.children_entries.clone().unwrap()
     }
 }
 
@@ -378,7 +449,10 @@ impl IDiskManager for DiskManager {
             first_cluster as u16,
             FileEntryAttributes::File as u8,
             Utc::now(),
-            Some(Box::new(self.working_directory.clone())),
+            Some(Box::new((
+                self.working_directory.clone(),
+                self.working_directory.clone().name,
+            ))),
             None,
         );
         let file_entry_index = self
@@ -440,7 +514,7 @@ impl IDiskManager for DiskManager {
     fn list_files(&mut self, request: &ListRequest) -> Result<RootTable, Box<dyn Error>> {
         // filter away empty entries
         let mut file_entries: RootTable = self
-            .root
+            .get_root_table_for_working_directory()
             .iter()
             .filter(|&file_entry| !file_entry.name.is_empty())
             .cloned()
@@ -805,13 +879,22 @@ impl IDiskManager for DiskManager {
             DiskManager::write_to_temp(file_content.as_str())?;
 
             // create a new file entry in the new disk representation
-            let create_request = CreateRequest::new(
-                file_entry.name.clone(),
-                file_entry.extension.clone(),
-                file_content.len() as u32,
-                ContentType::Temp,
-            );
-            new_disk_manager.create_file(&create_request)?;
+            match file_entry.is_file() {
+                true => {
+                    let create_request = CreateRequest::new(
+                        file_entry.name.clone(),
+                        file_entry.extension.clone(),
+                        file_content.len() as u32,
+                        ContentType::Temp,
+                    );
+                    new_disk_manager.create_file(&create_request)?;
+                }
+                false => {
+                    let make_directory_request = MakeDirectoryRequest::new(file_entry.name.clone());
+                    new_disk_manager.make_directory(&make_directory_request)?;
+                    // TODO: do not forget to create the children entries too
+                }
+            }
 
             // sync the datetime of the old file entry to the new file entry
             let new_file_entry = new_disk_manager
@@ -832,10 +915,11 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
+    // TODO: update working directory after every command
     fn make_directory(&mut self, request: &MakeDirectoryRequest) -> Void {
         // check if the directory name already exists
         if self
-            .root
+            .get_root_table_for_working_directory()
             .iter()
             .any(|file_entry| file_entry.name == request.name && !file_entry.is_file())
         {
@@ -869,7 +953,10 @@ impl IDiskManager for DiskManager {
             first_cluster_index,
             0_u8,
             Utc::now(),
-            Some(Box::new(self.working_directory.clone())),
+            Some(Box::new((
+                self.working_directory.clone(),
+                self.working_directory.clone().name,
+            ))),
             Some(Vec::new()),
         );
 
@@ -885,13 +972,26 @@ impl IDiskManager for DiskManager {
 
         dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
 
-        let dir_file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| file_entry.name.is_empty())
-            .unwrap();
+        // update the root table
+        match self.working_directory.name == "/" {
+            true => {
+                let dir_file_entry_index = self
+                    .root
+                    .iter()
+                    .position(|file_entry| file_entry.name.is_empty())
+                    .unwrap();
 
-        self.root[dir_file_entry_index] = dir_file_entry.clone();
+                self.root[dir_file_entry_index] = dir_file_entry.clone();
+            }
+            false => {
+                // TODO: persist the working directory to the storage
+                self.working_directory
+                    .children_entries
+                    .as_mut()
+                    .unwrap()
+                    .push(dir_file_entry.clone());
+            }
+        }
 
         // update the fat and the storage
         let mut current_cluster = first_cluster_index as usize;
@@ -951,8 +1051,62 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
+    fn change_working_directory(&mut self, request: &ChangeDirectoryRequest) -> Void {
+        // check if the directory exists
+        if !self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| file_entry.name == request.directory_name && !file_entry.is_file())
+        {
+            return Err(Box::try_from(format!(
+                "Directory {} does not exist",
+                request.directory_name
+            ))
+            .unwrap());
+        }
+
+        if request.directory_name == "." {
+            return Ok(());
+        }
+
+        if request.directory_name == ".." {
+            let parent = self.working_directory.parent_entry.clone().unwrap();
+            self.working_directory = (*parent).0;
+            return Ok(());
+        }
+
+        // change the working directory
+        self.working_directory = self
+            .get_root_table_for_working_directory()
+            .iter()
+            .find(|file_entry| file_entry.name == request.directory_name && !file_entry.is_file())
+            .unwrap()
+            .clone();
+
+        Ok(())
+    }
+
     fn get_working_directory(&self) -> String {
-        self.working_directory.name.clone()
+        // construct the whole path from the root to the working directory
+        let mut dirs: Vec<&str> = Vec::new();
+        dirs.push(&self.working_directory.name);
+
+        let mut current_dir = &(
+            self.working_directory.clone(),
+            self.working_directory.name.clone(),
+        );
+        while let Some(parent_dir) = current_dir.0.parent_entry.as_ref() {
+            current_dir = parent_dir;
+            dirs.push(&current_dir.1);
+        }
+
+        if self.working_directory.parent_entry.is_some() {
+            dirs.pop();
+            dirs.push("");
+        }
+
+        dirs.reverse();
+        dirs.join("/")
     }
 
     fn get_boot_sector(&self) -> BootSector {

@@ -53,8 +53,8 @@ terminator = "$"
     [commands.del]
     name = "del"
     description = "Delete a file or a directory"
-    usage = "del <file_name>.<file_extension>"
-    regex = "^\\s*del\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s*$"
+    usage = "del <file_name>.<file_extension> or del <directory_name>"
+    regex = "^\\s*del\\s+(?P<name>[a-zA-Z0-9_]+)(\\.(?P<extension>\\S+))?\\s*$"
 
     [commands.cat]
     name = "cat"
@@ -91,3 +91,9 @@ terminator = "$"
     description = "Create a new directory"
     usage = "mkdir <directory_name>"
     regex = "^\\s*mkdir\\s+(?P<name>\\S+)\\s*$"
+
+    [commands.cd]
+    name = "cd"
+    description = "Change the current directory"
+    usage = "cd <directory_name>"
+    regex = "^\\s*cd\\s+(?P<name>\\S+)\\s*$"

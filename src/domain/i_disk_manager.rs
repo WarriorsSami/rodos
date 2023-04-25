@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
@@ -102,7 +103,14 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// * `Box<dyn Error>` - If the directory name already exists or there is not enough space in the disk.
     fn make_directory(&mut self, request: &MakeDirectoryRequest) -> Void;
 
-    /// Returns the working directory
+    /// Changes the working directory
+    /// ## Arguments
+    /// * `request` - The request containing the directory name.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the directory does not exist.
+    fn change_working_directory(&mut self, request: &ChangeDirectoryRequest) -> Void;
+
+    /// Returns the whole path to the working directory
     fn get_working_directory(&self) -> String;
 
     /// Get boot sector

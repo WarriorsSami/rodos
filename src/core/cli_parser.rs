@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::defrag::DefragmentRequest;
@@ -229,7 +230,10 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let name = captures.name("name").unwrap().as_str();
-            let extension = captures.name("extension").unwrap().as_str();
+            let extension = match captures.name("extension") {
+                Some(extension) => extension.as_str(),
+                None => "",
+            };
 
             if name.len() > 8 {
                 return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
@@ -416,6 +420,26 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid mkdir command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_cd(input: &str) -> Result<ChangeDirectoryRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("cd").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("cd").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Cd command parsed successfully: {}", input);
+            Ok(ChangeDirectoryRequest::new(name.to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid cd command syntax!").unwrap())
         }
     }
 }

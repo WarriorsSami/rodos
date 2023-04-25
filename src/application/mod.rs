@@ -1,6 +1,7 @@
 use std::error::Error;
 
 pub(crate) mod cat;
+pub(crate) mod cd;
 pub(crate) mod cp;
 pub(crate) mod create;
 pub(crate) mod defrag;

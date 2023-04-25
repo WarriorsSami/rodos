@@ -83,8 +83,8 @@ impl Default for Config {
             Command {
                 name: "del".to_string(),
                 description: "Delete a file or a directory".to_string(),
-                usage: "del <file_name>.<file_extension>".to_string(),
-                regex: r"^\s*del\s+(?P<name>\S+)\.(?P<extension>\S+)\s*$".to_string(),
+                usage: "del <file_name>.<file_extension> or del <directory_name>".to_string(),
+                regex: r"^\s*del\s+(?P<name>[a-zA-Z0-9_]+)(\.(?P<extension>\S+))?\s*$".to_string(),
             },
         );
 
@@ -147,6 +147,16 @@ impl Default for Config {
                 description: "Create a new directory".to_string(),
                 usage: "mkdir <directory_name>".to_string(),
                 regex: r"^\s*mkdir\s+(?P<name>\S+)\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "cd".to_string(),
+            Command {
+                name: "cd".to_string(),
+                description: "Change the current directory".to_string(),
+                usage: "cd <directory_name>".to_string(),
+                regex: r"^\s*cd\s+(?P<name>\S+)\s*$".to_string(),
             },
         );
 

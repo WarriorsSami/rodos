@@ -1,5 +1,5 @@
 use crate::infrastructure::disk_manager::ByteArray;
-use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, LocalResult, TimeZone, Timelike, Utc};
 use std::fmt::Display;
 use std::ops::BitOr;
 use std::str::FromStr;
@@ -40,7 +40,7 @@ pub(crate) struct FileEntry {
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
     pub(crate) last_modification_datetime: DateTime<Utc>,
-    pub(crate) parent_entry: Option<Box<FileEntry>>,
+    pub(crate) parent_entry: Option<Box<(FileEntry, String)>>,
     pub(crate) children_entries: Option<Vec<FileEntry>>,
 }
 
@@ -52,7 +52,7 @@ impl FileEntry {
         first_cluster: u16,
         attributes: u8,
         last_modification_datetime: DateTime<Utc>,
-        parent_entry: Option<Box<FileEntry>>,
+        parent_entry: Option<Box<(FileEntry, String)>>,
         children_entries: Option<Vec<FileEntry>>,
     ) -> Self {
         Self {
@@ -67,13 +67,14 @@ impl FileEntry {
         }
     }
 
+    // TODO: pass a config object to this function
     pub(crate) fn root() -> Self {
         Self {
             name: "/".to_string(),
             extension: "".to_string(),
             size: 0,
             first_cluster: 0,
-            attributes: 0,
+            attributes: FileEntryAttributes::ReadOnly as u8,
             last_modification_datetime: Utc::now(),
             parent_entry: None,
             children_entries: Some(Vec::new()),
@@ -104,7 +105,7 @@ impl FileEntry {
         result
     }
 
-    fn convert_u16_tuple_to_date_time(value: (u16, u16)) -> DateTime<Utc> {
+    fn convert_u16_tuple_to_date_time(value: (u16, u16)) -> LocalResult<DateTime<Utc>> {
         let year = (value.0 >> 9) + 1980;
         let month = (value.0 >> 5) & 0x0F;
         let day = value.0 & 0x1F;
@@ -120,7 +121,6 @@ impl FileEntry {
             minute as u32,
             second as u32,
         )
-        .unwrap()
     }
 
     pub(crate) fn is_file(&self) -> bool {
@@ -183,7 +183,13 @@ impl From<ByteArray> for FileEntry {
         let time = u16::from_be_bytes([value[18], value[19]]);
         let date = u16::from_be_bytes([value[20], value[21]]);
 
-        let updated_datetime = FileEntry::convert_u16_tuple_to_date_time((date, time));
+        let last_modification_datetime =
+            match FileEntry::convert_u16_tuple_to_date_time((date, time)) {
+                LocalResult::Single(value) => value,
+                _ => {
+                    panic!("Invalid date and time: {:?}", value);
+                }
+            };
 
         Self {
             name,
@@ -191,7 +197,7 @@ impl From<ByteArray> for FileEntry {
             size,
             first_cluster,
             attributes,
-            last_modification_datetime: updated_datetime,
+            last_modification_datetime,
             parent_entry: None,
             children_entries: None,
         }

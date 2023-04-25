@@ -32,16 +32,24 @@ impl DeleteHandler {
 
 impl RequestHandler<DeleteRequest, Void> for DeleteHandler {
     fn handle(&mut self, request: DeleteRequest) -> Void {
-        log::info!(
-            "Deleting file {}.{}...",
-            request.file_name,
-            request.file_extension
-        );
-        cprintln!(
-            "Deleting file <b!>{}.{}</>...",
-            request.file_name,
-            request.file_extension
-        );
+        match request.file_extension.as_str() {
+            "" => {
+                log::info!("Deleting directory {}...", request.file_name);
+                cprintln!("Deleting directory <b!>{}</>...", request.file_name,);
+            }
+            _ => {
+                log::info!(
+                    "Deleting file {}.{}...",
+                    request.file_name,
+                    request.file_extension
+                );
+                cprintln!(
+                    "Deleting file <b!>{}.{}</>...",
+                    request.file_name,
+                    request.file_extension
+                );
+            }
+        }
 
         match self.disk_manager.lock() {
             Ok(mut disk_manager) => match disk_manager.delete_file(&request) {
