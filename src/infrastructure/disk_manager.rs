@@ -4,6 +4,7 @@ use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::ls::ListRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
@@ -377,6 +378,8 @@ impl IDiskManager for DiskManager {
             first_cluster as u16,
             FileEntryAttributes::File as u8,
             Utc::now(),
+            Some(Box::new(self.working_directory.clone())),
+            None,
         );
         let file_entry_index = self
             .root
@@ -699,6 +702,8 @@ impl IDiskManager for DiskManager {
             dest_file_first_cluster,
             FileEntryAttributes::File as u8,
             Utc::now(),
+            src_file_entry.parent_entry,
+            src_file_entry.children_entries,
         );
         self.root[dest_file_entry_index] = dest_file_entry.clone();
 
@@ -823,6 +828,125 @@ impl IDiskManager for DiskManager {
 
         // push sync
         new_disk_manager.push_sync();
+
+        Ok(())
+    }
+
+    fn make_directory(&mut self, request: &MakeDirectoryRequest) -> Void {
+        // check if the directory name already exists
+        if self
+            .root
+            .iter()
+            .any(|file_entry| file_entry.name == request.name && !file_entry.is_file())
+        {
+            return Err(
+                Box::try_from(format!("Directory {} already exists", request.name)).unwrap(),
+            );
+        }
+
+        // check if there is enough space in fat
+        let free_clusters = self
+            .fat
+            .iter()
+            .filter(|&fat_value| *fat_value == FatValue::Free)
+            .count();
+
+        if free_clusters == 0 {
+            return Err(Box::try_from("Not enough space in FAT").unwrap());
+        }
+
+        // create the directory file entry and attach the two special dir entries: `.` and `..`
+        let first_cluster_index = self
+            .fat
+            .iter()
+            .position(|fat_value| *fat_value == FatValue::Free)
+            .unwrap() as u16;
+
+        let mut dir_file_entry = FileEntry::new(
+            request.name.clone(),
+            "".to_string(),
+            (self.boot_sector.root_entry_cell_size * 2) as u32,
+            first_cluster_index,
+            0_u8,
+            Utc::now(),
+            Some(Box::new(self.working_directory.clone())),
+            Some(Vec::new()),
+        );
+
+        let mut dot_dir_entry = dir_file_entry.clone();
+        dot_dir_entry.name = ".".to_string();
+        dot_dir_entry.attributes = FileEntryAttributes::Hidden | FileEntryAttributes::ReadOnly;
+
+        let mut double_dot_dir_entry = self.working_directory.clone();
+        double_dot_dir_entry.name = "..".to_string();
+        double_dot_dir_entry.extension = "".to_string();
+        double_dot_dir_entry.attributes =
+            FileEntryAttributes::Hidden | FileEntryAttributes::ReadOnly;
+
+        dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
+
+        let dir_file_entry_index = self
+            .root
+            .iter()
+            .position(|file_entry| file_entry.name.is_empty())
+            .unwrap();
+
+        self.root[dir_file_entry_index] = dir_file_entry.clone();
+
+        // update the fat and the storage
+        let mut current_cluster = first_cluster_index as usize;
+        let mut remaining_file_size = dir_file_entry.size as u16;
+        let mut file_data = dir_file_entry
+            .children_entries
+            .as_ref()
+            .unwrap()
+            .iter()
+            .cloned()
+            .flat_map(|file_entry| {
+                let file_byte_array: ByteArray = file_entry.into();
+                file_byte_array
+            })
+            .collect::<Vec<u8>>();
+
+        while remaining_file_size > 0 {
+            match self
+                .fat
+                .iter()
+                .enumerate()
+                .position(|(cluster_index, fat_value)| {
+                    *fat_value == FatValue::Free && cluster_index > current_cluster
+                }) {
+                Some(next_cluster) => {
+                    self.fat[current_cluster] = FatValue::Data(next_cluster as u16);
+
+                    self.storage_buffer[current_cluster] = file_data
+                        .drain(
+                            ..std::cmp::min(
+                                self.boot_sector.cluster_size as usize,
+                                remaining_file_size as usize,
+                            ),
+                        )
+                        .collect();
+
+                    if remaining_file_size > self.boot_sector.cluster_size {
+                        remaining_file_size -= self.boot_sector.cluster_size;
+                        current_cluster = next_cluster;
+                    } else {
+                        // add the remaining padding as 0 at the end of the cluster
+                        self.storage_buffer[current_cluster]
+                            .resize(self.boot_sector.cluster_size as usize, 0);
+                        self.fat[current_cluster] = FatValue::EndOfChain;
+                        remaining_file_size = 0;
+                    }
+                }
+                None => {
+                    // mark the current cluster as end of chain and free the chain cluster and the file entry
+                    self.fat[current_cluster] = FatValue::EndOfChain;
+                    self.free_clusters_and_entry(&dir_file_entry);
+                    return Err(Box::try_from("No space in fat".to_string()).unwrap());
+                }
+            }
+        }
 
         Ok(())
     }

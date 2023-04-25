@@ -85,3 +85,9 @@ terminator = "$"
     description = "Set the attributes of a file or a directory"
     usage = "setattr <file_name>.<file_extension> <attributes>(max 2 blocks, e.g. +w-h, but not +w-h+h)\n<attributes>:\n\t+w: make read-write\n\t-w: make read-only\n\t+h: make hidden\n\t-h: make visible"
     regex = "^\\s*setattr\\s+(?P<name>[a-zA-Z0-9_]+)(\\.(?P<extension>\\S+))?\\s+(?P<attributes>((\\+|-)(w|h)){1,2})\\s*$"
+
+    [commands.mkdir]
+    name = "mkdir"
+    description = "Create a new directory"
+    usage = "mkdir <directory_name>"
+    regex = "^\\s*mkdir\\s+(?P<name>\\S+)\\s*$"

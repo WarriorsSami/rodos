@@ -46,9 +46,14 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                         );
 
                         if request.filters.contains(&FilterType::InShortFormat) {
-                            file_entries.iter().for_each(|file_entry| {
-                                println!("{}.{}", file_entry.name, file_entry.extension);
-                            });
+                            file_entries
+                                .iter()
+                                .for_each(|file_entry| match file_entry.is_file() {
+                                    true => {
+                                        println!("{}.{}", file_entry.name, file_entry.extension)
+                                    }
+                                    false => println!("{}", file_entry.name),
+                                });
                         } else {
                             file_entries.iter().for_each(|file_entry| {
                                 println!("{}", file_entry);

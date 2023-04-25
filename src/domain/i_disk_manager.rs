@@ -4,6 +4,7 @@ use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::ls::ListRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
@@ -93,6 +94,13 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// ## Errors
     /// * `Box<dyn Error>` - If the disk is not able to be defragmented.
     fn defragment_disk(&mut self) -> Void;
+
+    /// Creates a new directory in the working directory.
+    /// ## Arguments
+    /// * `request` - The request containing the directory name.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the directory name already exists or there is not enough space in the disk.
+    fn make_directory(&mut self, request: &MakeDirectoryRequest) -> Void;
 
     /// Returns the working directory
     fn get_working_directory(&self) -> String;

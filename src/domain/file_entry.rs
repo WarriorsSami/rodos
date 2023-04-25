@@ -40,6 +40,8 @@ pub(crate) struct FileEntry {
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
     pub(crate) last_modification_datetime: DateTime<Utc>,
+    pub(crate) parent_entry: Option<Box<FileEntry>>,
+    pub(crate) children_entries: Option<Vec<FileEntry>>,
 }
 
 impl FileEntry {
@@ -50,6 +52,8 @@ impl FileEntry {
         first_cluster: u16,
         attributes: u8,
         last_modification_datetime: DateTime<Utc>,
+        parent_entry: Option<Box<FileEntry>>,
+        children_entries: Option<Vec<FileEntry>>,
     ) -> Self {
         Self {
             name,
@@ -58,6 +62,8 @@ impl FileEntry {
             first_cluster,
             attributes,
             last_modification_datetime,
+            parent_entry,
+            children_entries,
         }
     }
 
@@ -69,6 +75,8 @@ impl FileEntry {
             first_cluster: 0,
             attributes: 0,
             last_modification_datetime: Utc::now(),
+            parent_entry: None,
+            children_entries: Some(Vec::new()),
         }
     }
 
@@ -130,15 +138,25 @@ impl FileEntry {
 
 impl Display for FileEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} - {}.{} {} ({} B)",
-            self.get_attributes_as_string(),
-            self.name,
-            self.extension,
-            self.last_modification_datetime,
-            self.size
-        )
+        match self.is_file() {
+            true => write!(
+                f,
+                "{} - {}.{} {} ({} B)",
+                self.get_attributes_as_string(),
+                self.name,
+                self.extension,
+                self.last_modification_datetime,
+                self.size
+            ),
+            false => write!(
+                f,
+                "{} - {} {} ({} B)",
+                self.get_attributes_as_string(),
+                self.name,
+                self.last_modification_datetime,
+                self.size
+            ),
+        }
     }
 }
 
@@ -174,6 +192,8 @@ impl From<ByteArray> for FileEntry {
             first_cluster,
             attributes,
             last_modification_datetime: updated_datetime,
+            parent_entry: None,
+            children_entries: None,
         }
     }
 }

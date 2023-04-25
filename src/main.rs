@@ -6,6 +6,7 @@ use crate::application::del::DeleteHandler;
 use crate::application::fmt::FormatHandler;
 use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
+use crate::application::mkdir::MakeDirectoryHandler;
 use crate::application::neofetch::NeofetchHandler;
 use crate::application::rename::RenameHandler;
 use crate::application::setattr::SetAttributesHandler;
@@ -26,6 +27,9 @@ use std::sync::{Arc, Mutex};
 
 mod application;
 mod core;
+mod domain;
+mod infrastructure;
+
 // config
 lazy_static! {
     pub(crate) static ref CONFIG: Config = {
@@ -35,7 +39,7 @@ lazy_static! {
             Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
             Err(..) => Config::default(),
         };
-        
+
         // create disk folder if it doesn't exist
         if !std::path::Path::new(&config.disk_dir_path).exists() {
             std::fs::create_dir(&config.disk_dir_path).expect("Unable to create disk folder");
@@ -95,11 +99,9 @@ lazy_static! {
         .add_handler(FormatHandler::new(DISK_ARC.clone()))
         .add_handler(DefragmentHandler::new(DISK_ARC.clone()))
         .add_handler(SetAttributesHandler::new(DISK_ARC.clone()))
+        .add_handler(MakeDirectoryHandler::new(DISK_ARC.clone()))
         .build();
 }
-mod domain;
-
-mod infrastructure;
 
 fn main() {
     init_logger();
@@ -111,7 +113,9 @@ fn main() {
 
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
-            Ok(..) => {}
+            Ok(read_bytes) => {
+                log::info!("Read {} bytes from stdin", read_bytes);
+            }
             Err(err) => {
                 warn!("Unable to read input, please try again!");
 
@@ -173,6 +177,12 @@ fn main() {
                 parse_defrag,
                 input.as_str(),
                 "Disk defragmented successfully"
+            ),
+            "mkdir" => handle!(
+                mediator,
+                parse_mkdir,
+                input.as_str(),
+                "Directory created successfully!"
             ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => handle!(

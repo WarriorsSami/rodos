@@ -3,11 +3,12 @@
 macro_rules! prompt {
     ($($arg:tt)*) => {
         cprint!(
-            "<w!>{}</><b!>{}</><w!>{}</><b!>{}</>/<b!>{}</> ",
+            "<w!>{}</><b!>{}</><w!>{}</><b!>{}</>{}<b!>{}</> ",
             CONFIG.prompt.host,
             CONFIG.prompt.separator,
             CONFIG.prompt.user,
             CONFIG.prompt.path_prefix,
+            DISK_ARC.clone().lock().unwrap().get_working_directory(),
             CONFIG.prompt.terminator
         );
 

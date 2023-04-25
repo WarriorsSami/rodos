@@ -8,6 +8,7 @@ pub(crate) mod del;
 pub(crate) mod fmt;
 pub(crate) mod help;
 pub(crate) mod ls;
+pub(crate) mod mkdir;
 pub(crate) mod neofetch;
 pub(crate) mod rename;
 pub(crate) mod setattr;

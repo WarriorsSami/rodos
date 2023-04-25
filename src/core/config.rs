@@ -140,6 +140,16 @@ impl Default for Config {
             }
         );
 
+        commands.insert(
+            "mkdir".to_string(),
+            Command {
+                name: "mkdir".to_string(),
+                description: "Create a new directory".to_string(),
+                usage: "mkdir <directory_name>".to_string(),
+                regex: r"^\s*mkdir\s+(?P<name>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

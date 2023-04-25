@@ -6,6 +6,7 @@ use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::neofetch::NeofetchRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
@@ -394,6 +395,27 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid setattr command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_mkdir(input: &str) -> Result<MakeDirectoryRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("mkdir").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("mkdir").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Mkdir command parsed successfully: {}", input);
+            Ok(MakeDirectoryRequest::new(name.to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid mkdir command syntax!").unwrap())
         }
     }
 }
