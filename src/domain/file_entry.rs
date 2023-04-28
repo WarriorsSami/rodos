@@ -40,7 +40,7 @@ pub(crate) struct FileEntry {
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
     pub(crate) last_modification_datetime: DateTime<Utc>,
-    pub(crate) parent_entry: Option<Box<(FileEntry, String)>>,
+    pub(crate) parent_entry: Option<Box<FileEntry>>,
     pub(crate) children_entries: Option<Vec<FileEntry>>,
 }
 
@@ -52,7 +52,7 @@ impl FileEntry {
         first_cluster: u16,
         attributes: u8,
         last_modification_datetime: DateTime<Utc>,
-        parent_entry: Option<Box<(FileEntry, String)>>,
+        parent_entry: Option<Box<FileEntry>>,
         children_entries: Option<Vec<FileEntry>>,
     ) -> Self {
         Self {

@@ -76,11 +76,7 @@ impl IDiskManager for DiskManager {
         }
 
         // find a free cluster in fat
-        let first_cluster = self
-            .fat
-            .iter()
-            .position(|fat_value| *fat_value == FatValue::Free)
-            .unwrap();
+        let first_cluster = self.get_next_free_cluster_index_gt(0).unwrap();
 
         // create file entry in root
         let file_entry = FileEntry::new(
@@ -90,30 +86,21 @@ impl IDiskManager for DiskManager {
             first_cluster as u16,
             FileEntryAttributes::File as u8,
             Utc::now(),
-            Some(Box::new((
-                self.working_directory.clone(),
-                self.working_directory.clone().name,
-            ))),
+            Some(Box::new(self.working_directory.clone())),
             None,
         );
 
         // create the cluster chain in fat and write the file data to the storage buffer
-        let mut current_cluster = first_cluster;
+        let mut current_cluster_index = first_cluster;
         let mut remaining_file_size = request.file_size as u16;
         let mut file_data = ContentGenerator::generate(request.content_type, request.file_size);
 
         while remaining_file_size > 0 {
-            match self
-                .fat
-                .iter()
-                .enumerate()
-                .position(|(cluster_index, fat_value)| {
-                    *fat_value == FatValue::Free && cluster_index > current_cluster
-                }) {
-                Some(next_cluster) => {
-                    self.fat[current_cluster] = FatValue::Data(next_cluster as u16);
+            match self.get_next_free_cluster_index_gt(current_cluster_index) {
+                Some(next_cluster_index) => {
+                    self.fat[current_cluster_index] = FatValue::Data(next_cluster_index as u16);
 
-                    self.storage_buffer[current_cluster] = file_data
+                    self.storage_buffer[current_cluster_index] = file_data
                         .drain(
                             ..std::cmp::min(
                                 self.boot_sector.cluster_size as usize,
@@ -124,18 +111,18 @@ impl IDiskManager for DiskManager {
 
                     if remaining_file_size > self.boot_sector.cluster_size {
                         remaining_file_size -= self.boot_sector.cluster_size;
-                        current_cluster = next_cluster;
+                        current_cluster_index = next_cluster_index;
                     } else {
                         // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster]
+                        self.storage_buffer[current_cluster_index]
                             .resize(self.boot_sector.cluster_size as usize, 0);
-                        self.fat[current_cluster] = FatValue::EndOfChain;
+                        self.fat[current_cluster_index] = FatValue::EndOfChain;
                         remaining_file_size = 0;
                     }
                 }
                 None => {
                     // mark the current cluster as end of chain and free the chain cluster and the file entry
-                    self.fat[current_cluster] = FatValue::EndOfChain;
+                    self.fat[current_cluster_index] = FatValue::EndOfChain;
                     self.free_clusters_and_entry(&file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
@@ -267,7 +254,7 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    // TODO: add support for folders
+    // TODO: add support for folders in delete
     fn delete_file(&mut self, request: &DeleteRequest) -> Void {
         // check if the file exists in root
         if !self.root.iter().any(|file_entry| {
@@ -359,6 +346,7 @@ impl IDiskManager for DiskManager {
         Ok(content)
     }
 
+    // TODO: add support for folders in copy
     fn copy_file(&mut self, request: &CopyRequest) -> Void {
         // check if the src file exists in root
         if !self.root.iter().any(|file_entry| {
@@ -470,11 +458,16 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
+    // TODO: add support for files in nested folders in set attributes
     fn set_attributes(&mut self, request: &SetAttributesRequest) -> Void {
         // check if the file exists
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.name && file_entry.extension == request.extension
-        }) {
+        if !self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.name && file_entry.extension == request.extension
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} does not exist",
                 request.name, request.extension
@@ -482,21 +475,38 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        // get the file entry
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.name && file_entry.extension == request.extension
-            })
-            .unwrap_or_default();
+        if self.working_directory.name == "/" {
+            // get the file entry
+            let file_entry_index = self
+                .root
+                .iter()
+                .position(|file_entry| {
+                    file_entry.name == request.name && file_entry.extension == request.extension
+                })
+                .unwrap_or_default();
 
-        // set the attributes
-        // persist the file entry type (file or folder)
-        // as the attributes from the request are only related to hidden or read only flags
-        let file_entry_type_attr =
-            self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
-        self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
+            // set the attributes
+            // persist the file entry type (file or folder)
+            // as the attributes from the request are only related to hidden or read only flags
+            let file_entry_type_attr =
+                self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
+            self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
+        } else {
+            let file_entry = self
+                .get_root_table_for_working_directory()
+                .iter_mut()
+                .find(|file_entry| {
+                    file_entry.name == request.name && file_entry.extension == request.extension
+                })
+                .unwrap();
+
+            // set the attributes
+            let file_entry_type_attr = file_entry.attributes & FileEntryAttributes::File as u8;
+            file_entry.attributes = file_entry_type_attr | request.attributes;
+
+            // persist the file entry into the storage
+            self.sync_working_directory_to_storage();
+        }
 
         Ok(())
     }
@@ -610,10 +620,7 @@ impl IDiskManager for DiskManager {
             first_cluster_index,
             0_u8,
             Utc::now(),
-            Some(Box::new((
-                self.working_directory.clone(),
-                self.working_directory.clone().name,
-            ))),
+            Some(Box::new(self.working_directory.clone())),
             Some(Vec::new()),
         );
 
@@ -630,7 +637,7 @@ impl IDiskManager for DiskManager {
         dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
 
         // update the fat and the storage
-        let mut current_cluster = first_cluster_index as usize;
+        let mut current_cluster_index = first_cluster_index as usize;
         let mut remaining_file_size = dir_file_entry.size as u16;
         let mut file_data = dir_file_entry
             .children_entries
@@ -645,17 +652,11 @@ impl IDiskManager for DiskManager {
             .collect::<Vec<u8>>();
 
         while remaining_file_size > 0 {
-            match self
-                .fat
-                .iter()
-                .enumerate()
-                .position(|(cluster_index, fat_value)| {
-                    *fat_value == FatValue::Free && cluster_index > current_cluster
-                }) {
-                Some(next_cluster) => {
-                    self.fat[current_cluster] = FatValue::Data(next_cluster as u16);
+            match self.get_next_free_cluster_index_gt(current_cluster_index) {
+                Some(next_cluster_index) => {
+                    self.fat[current_cluster_index] = FatValue::Data(next_cluster_index as u16);
 
-                    self.storage_buffer[current_cluster] = file_data
+                    self.storage_buffer[current_cluster_index] = file_data
                         .drain(
                             ..std::cmp::min(
                                 self.boot_sector.cluster_size as usize,
@@ -666,18 +667,18 @@ impl IDiskManager for DiskManager {
 
                     if remaining_file_size > self.boot_sector.cluster_size {
                         remaining_file_size -= self.boot_sector.cluster_size;
-                        current_cluster = next_cluster;
+                        current_cluster_index = next_cluster_index;
                     } else {
                         // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster]
+                        self.storage_buffer[current_cluster_index]
                             .resize(self.boot_sector.cluster_size as usize, 0);
-                        self.fat[current_cluster] = FatValue::EndOfChain;
+                        self.fat[current_cluster_index] = FatValue::EndOfChain;
                         remaining_file_size = 0;
                     }
                 }
                 None => {
                     // mark the current cluster as end of chain and free the chain cluster and the file entry
-                    self.fat[current_cluster] = FatValue::EndOfChain;
+                    self.fat[current_cluster_index] = FatValue::EndOfChain;
                     self.free_clusters_and_entry(&dir_file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
@@ -723,7 +724,7 @@ impl IDiskManager for DiskManager {
 
         if request.directory_name == ".." {
             let parent = self.working_directory.parent_entry.clone().unwrap();
-            self.working_directory = (*parent).0;
+            self.working_directory = *parent;
             return Ok(());
         }
 
@@ -743,13 +744,10 @@ impl IDiskManager for DiskManager {
         let mut dirs: Vec<&str> = Vec::new();
         dirs.push(&self.working_directory.name);
 
-        let mut current_dir = &(
-            self.working_directory.clone(),
-            self.working_directory.name.clone(),
-        );
-        while let Some(parent_dir) = current_dir.0.parent_entry.as_ref() {
+        let mut current_dir = &self.working_directory;
+        while let Some(parent_dir) = current_dir.parent_entry.as_ref() {
             current_dir = parent_dir;
-            dirs.push(&current_dir.1);
+            dirs.push(&current_dir.name);
         }
 
         if self.working_directory.parent_entry.is_some() {
