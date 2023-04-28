@@ -36,9 +36,14 @@ impl IDiskManager for DiskManager {
 
     fn create_file(&mut self, request: &CreateRequest) -> Void {
         // check if file already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
+        if self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.file_name
+                    && file_entry.extension == request.file_extension
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} already exists",
                 request.file_name, request.file_extension
@@ -47,10 +52,11 @@ impl IDiskManager for DiskManager {
         }
 
         // check if there is enough space in root
-        if self
-            .root
-            .iter()
-            .all(|file_entry| !file_entry.name.is_empty())
+        if self.working_directory.name == "/"
+            && self
+                .root
+                .iter()
+                .all(|file_entry| !file_entry.name.is_empty())
         {
             return Err(Box::try_from("No space in root".to_string()).unwrap());
         }
@@ -89,13 +95,6 @@ impl IDiskManager for DiskManager {
             ))),
             None,
         );
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| file_entry.name.is_empty())
-            .unwrap();
-
-        self.root[file_entry_index] = file_entry.clone();
 
         // create the cluster chain in fat and write the file data to the storage buffer
         let mut current_cluster = first_cluster;
@@ -139,6 +138,21 @@ impl IDiskManager for DiskManager {
                     self.free_clusters_and_entry(&file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
+            }
+        }
+
+        match self.working_directory.name == "/" {
+            true => {
+                let file_entry_index = self
+                    .root
+                    .iter()
+                    .position(|file_entry| file_entry.name.is_empty())
+                    .unwrap();
+
+                self.root[file_entry_index] = file_entry.clone();
+            }
+            false => {
+                self.append_to_root_table_of_working_dir(file_entry.clone())?;
             }
         }
 
@@ -291,10 +305,16 @@ impl IDiskManager for DiskManager {
     }
 
     fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>> {
-        // check if the file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
+        // check if the file exists in the working directory
+        if !self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.file_name
+                    && file_entry.extension == request.file_extension
+                    && file_entry.is_file()
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} does not exist",
                 request.file_name, request.file_extension
@@ -303,18 +323,20 @@ impl IDiskManager for DiskManager {
         }
 
         // get the file entry
-        let file_entry_index = self
-            .root
+        let file_entry = self
+            .get_root_table_for_working_directory()
             .iter()
-            .position(|file_entry| {
+            .find(|&file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
+                    && file_entry.is_file()
             })
-            .unwrap_or_default();
+            .cloned()
+            .unwrap();
 
         // iterate through the cluster chain and read the file content from the storage buffer
         let mut content = String::new();
-        let mut current_cluster = self.root[file_entry_index].first_cluster as usize;
+        let mut current_cluster = file_entry.first_cluster as usize;
 
         while self.fat[current_cluster] != FatValue::EndOfChain {
             content.push_str(&String::from_utf8_lossy(
@@ -327,7 +349,7 @@ impl IDiskManager for DiskManager {
 
         // push the remaining content
         let remaining_content_size =
-            self.root[file_entry_index].size as usize % self.boot_sector.cluster_size as usize;
+            file_entry.size as usize % self.boot_sector.cluster_size as usize;
         content.push_str(&String::from_utf8_lossy(
             &self.storage_buffer[current_cluster][..remaining_content_size],
         ));

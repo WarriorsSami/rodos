@@ -275,7 +275,6 @@ impl DiskManager {
                         if file_entry_result.is_file() {
                             file_entry_result
                         } else {
-                            // TODO: handle directory, i.e. attach the directory tree (recursive parent/children)
                             file_entry_result.children_entries =
                                 Some(self.get_directory_root_table(&file_entry_result));
                             file_entry_result
