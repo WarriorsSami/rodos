@@ -58,14 +58,18 @@ impl RequestHandler<CreateRequest, Void> for CreateHandler {
         );
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.create_file(&request) {
-                Ok(_) => {
-                    log::info!("Created file successfully");
-                    disk_manager.push_sync();
-                    Ok(())
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
+
+                match disk_manager.create_file(&request) {
+                    Ok(_) => {
+                        log::info!("Created file successfully");
+                        disk_manager.push_sync();
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(_) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
         }
     }

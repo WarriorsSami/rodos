@@ -34,6 +34,7 @@ impl IDiskManager for DiskManager {
         self.sync_from_buffer(true);
     }
 
+    // TODO: update the size and last modified date for the parent directory
     fn create_file(&mut self, request: &CreateRequest) -> Void {
         // check if file already exists in root
         if self
@@ -266,6 +267,7 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
+    // TODO: add support for folders
     fn delete_file(&mut self, request: &DeleteRequest) -> Void {
         // check if the file exists in root
         if !self.root.iter().any(|file_entry| {

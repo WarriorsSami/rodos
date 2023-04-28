@@ -257,7 +257,10 @@ impl DiskManager {
             .chunks(clusters_per_root_entry as usize)
             .take(self.root.len())
             .map(|cluster| {
-                let cluster_is_empty = cluster[0].iter().all(|byte| *byte == 0);
+                let cluster_is_empty = cluster[0]
+                    .iter()
+                    .take((self.boot_sector.root_entry_cell_size / 2) as usize)
+                    .all(|byte| *byte == 0);
 
                 match cluster_is_empty {
                     false => {
@@ -290,7 +293,7 @@ impl DiskManager {
             self.working_directory.parent_entry = None;
             self.working_directory.children_entries = Some(self.root.clone());
         } else {
-            self.pull_working_directory();
+            self.pull_working_directory_from_root();
         }
     }
 
@@ -309,7 +312,7 @@ impl DiskManager {
         path
     }
 
-    fn pull_working_directory(&mut self) {
+    fn pull_working_directory_from_root(&mut self) {
         let path = Self::get_path_from_root_to_entry(&self.working_directory);
 
         let mut current_entry = self
@@ -335,7 +338,7 @@ impl DiskManager {
         let mut root_table = RootTable::default();
 
         let mut current_cluster_index = directory_entry.first_cluster;
-        while self.fat[current_cluster_index as usize] != FatValue::EndOfChain {
+        while FatValue::from(current_cluster_index) != FatValue::EndOfChain {
             let mut file_entry_data: ByteArray = self
                 .storage_buffer
                 .get(current_cluster_index as usize)
@@ -371,9 +374,6 @@ impl DiskManager {
             }
 
             current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
-            if FatValue::from(current_cluster_index) == FatValue::EndOfChain {
-                break;
-            }
         }
 
         root_table
