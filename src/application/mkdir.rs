@@ -30,17 +30,21 @@ impl RequestHandler<MakeDirectoryRequest, Void> for MakeDirectoryHandler {
         log::info!("Making directory {}", req.name);
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.make_directory(&req) {
-                Ok(()) => {
-                    log::info!("Directory {} has been made successfully", req.name);
-                    disk_manager.push_sync();
-                    Ok(())
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
+
+                match disk_manager.make_directory(&req) {
+                    Ok(()) => {
+                        log::info!("Directory {} has been made successfully", req.name);
+                        disk_manager.push_sync();
+                        Ok(())
+                    }
+                    Err(err) => {
+                        log::error!("Unable to make directory {}: {}", req.name, err);
+                        Err(Box::try_from("Unable to make directory").unwrap())
+                    }
                 }
-                Err(err) => {
-                    log::error!("Unable to make directory {}: {}", req.name, err);
-                    Err(Box::try_from("Unable to make directory").unwrap())
-                }
-            },
+            }
             Err(err) => {
                 log::error!("Unable to lock disk manager: {}", err);
                 Err(Box::try_from("Unable to lock disk manager").unwrap())
