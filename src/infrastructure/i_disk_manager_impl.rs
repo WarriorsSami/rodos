@@ -16,7 +16,7 @@ use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::FatValue;
 use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
-use crate::infrastructure::disk_manager::{ByteArray, DiskManager};
+use crate::infrastructure::disk_manager::DiskManager;
 use crate::CONFIG_ARC;
 use chrono::Utc;
 use std::error::Error;
@@ -34,7 +34,6 @@ impl IDiskManager for DiskManager {
         self.sync_from_buffer(true);
     }
 
-    // TODO: update the size and last modified date for the parent directory
     fn create_file(&mut self, request: &CreateRequest) -> Void {
         // check if file already exists in root
         if self
@@ -129,20 +128,8 @@ impl IDiskManager for DiskManager {
             }
         }
 
-        match self.working_directory.name == "/" {
-            true => {
-                let file_entry_index = self
-                    .root
-                    .iter()
-                    .position(|file_entry| file_entry.name.is_empty())
-                    .unwrap();
-
-                self.root[file_entry_index] = file_entry.clone();
-            }
-            false => {
-                self.append_to_root_table_of_working_dir(file_entry.clone())?;
-            }
-        }
+        // update the root table
+        self.append_to_root_table_of_working_dir(file_entry.clone())?;
 
         Ok(())
     }
@@ -206,6 +193,7 @@ impl IDiskManager for DiskManager {
         Ok(file_entries)
     }
 
+    // TODO: add support for files in subdirectories
     fn rename_file(&mut self, request: &RenameRequest) -> Void {
         // check if the old file exists in root
         if !self.root.iter().any(|file_entry| {
@@ -254,7 +242,6 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    // TODO: add support for folders in delete
     fn delete_file(&mut self, request: &DeleteRequest) -> Void {
         // check if the file exists in root
         if !self.root.iter().any(|file_entry| {
@@ -404,11 +391,7 @@ impl IDiskManager for DiskManager {
         }
 
         // create the dest file entry and register it in root
-        let dest_file_first_cluster = self
-            .fat
-            .iter()
-            .position(|fat_value| *fat_value == FatValue::Free)
-            .unwrap() as u16;
+        let dest_file_first_cluster = self.get_next_free_cluster_index_gt(0).unwrap() as u16;
         let dest_file_entry_index = self
             .root
             .iter()
@@ -436,12 +419,7 @@ impl IDiskManager for DiskManager {
                 self.storage_buffer[current_src_cluster_index].clone();
 
             let next_dest_cluster_index: u16 = self
-                .fat
-                .iter()
-                .enumerate()
-                .position(|(cluster_index, fat_value)| {
-                    *fat_value == FatValue::Free && cluster_index > current_dest_cluster_index
-                })
+                .get_next_free_cluster_index_gt(current_dest_cluster_index)
                 .unwrap() as u16;
 
             self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
@@ -458,7 +436,6 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    // TODO: add support for files in nested folders in set attributes
     fn set_attributes(&mut self, request: &SetAttributesRequest) -> Void {
         // check if the file exists
         if !self
@@ -491,6 +468,7 @@ impl IDiskManager for DiskManager {
             let file_entry_type_attr =
                 self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
             self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
+            self.root[file_entry_index].last_modification_datetime = Utc::now();
         } else {
             let file_entry = self
                 .get_root_table_for_working_directory()
@@ -503,9 +481,10 @@ impl IDiskManager for DiskManager {
             // set the attributes
             let file_entry_type_attr = file_entry.attributes & FileEntryAttributes::File as u8;
             file_entry.attributes = file_entry_type_attr | request.attributes;
+            file_entry.last_modification_datetime = Utc::now();
 
-            // persist the file entry into the storage
-            self.sync_working_directory_to_storage();
+            // persist the file entry modifications into the storage
+            self.sync_directory_to_storage(&self.working_directory.clone());
         }
 
         Ok(())
@@ -513,7 +492,7 @@ impl IDiskManager for DiskManager {
 
     fn format_disk(&mut self, request: &FormatRequest) -> Void {
         // create a new in memory disk representation associated with the new fat type
-        let mut boot_sector = self.get_boot_sector();
+        let mut boot_sector = self.get_boot_sector().clone();
         let disk_size = boot_sector.cluster_size as u32 * boot_sector.cluster_count as u32;
 
         boot_sector.cluster_size = request.fat_type;
@@ -529,7 +508,8 @@ impl IDiskManager for DiskManager {
 
     fn defragment_disk(&mut self) -> Void {
         // create a new temporary disk representation
-        let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), self.get_boot_sector());
+        let mut new_disk_manager =
+            DiskManager::new(CONFIG_ARC.clone(), self.get_boot_sector().clone());
 
         // iterate over the root file entries
         for file_entry in self.root.clone().iter() {
@@ -574,6 +554,7 @@ impl IDiskManager for DiskManager {
                 })
                 .unwrap();
 
+            // TODO: update the create/make dir requests to include the datetime/attributes
             new_file_entry.last_modification_datetime = file_entry.last_modification_datetime;
         }
 
@@ -639,17 +620,7 @@ impl IDiskManager for DiskManager {
         // update the fat and the storage
         let mut current_cluster_index = first_cluster_index as usize;
         let mut remaining_file_size = dir_file_entry.size as u16;
-        let mut file_data = dir_file_entry
-            .children_entries
-            .as_ref()
-            .unwrap()
-            .iter()
-            .cloned()
-            .flat_map(|file_entry| {
-                let file_byte_array: ByteArray = file_entry.into();
-                file_byte_array
-            })
-            .collect::<Vec<u8>>();
+        let mut file_data = DiskManager::get_directory_root_table_as_data(&dir_file_entry);
 
         while remaining_file_size > 0 {
             match self.get_next_free_cluster_index_gt(current_cluster_index) {
@@ -686,20 +657,7 @@ impl IDiskManager for DiskManager {
         }
 
         // update the root table
-        match self.working_directory.name == "/" {
-            true => {
-                let dir_file_entry_index = self
-                    .root
-                    .iter()
-                    .position(|file_entry| file_entry.name.is_empty())
-                    .unwrap();
-
-                self.root[dir_file_entry_index] = dir_file_entry.clone();
-            }
-            false => {
-                self.append_to_root_table_of_working_dir(dir_file_entry.clone())?;
-            }
-        }
+        self.append_to_root_table_of_working_dir(dir_file_entry.clone())?;
 
         Ok(())
     }
@@ -759,8 +717,8 @@ impl IDiskManager for DiskManager {
         dirs.join("/")
     }
 
-    fn get_boot_sector(&self) -> BootSector {
-        self.boot_sector.clone()
+    fn get_boot_sector(&self) -> &BootSector {
+        &self.boot_sector
     }
 
     fn get_free_space(&mut self) -> u64 {

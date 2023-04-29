@@ -67,7 +67,6 @@ impl FileEntry {
         }
     }
 
-    // TODO: pass a config object to this function
     pub(crate) fn root() -> Self {
         Self {
             name: "/".to_string(),

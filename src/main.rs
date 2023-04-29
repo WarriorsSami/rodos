@@ -80,7 +80,7 @@ lazy_static! {
                 // create new disk manager according to the boot sector from the storage file
                 // this is necessary in order to tackle the inconsistencies between the in-memory
                 // data structures used to represent the disk when switching between FAT16 and FAT32 and vice-versa
-                disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector());
+                disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector().clone());
 
                 disk_manager.pull_sync(); // grab the rest of the data from the storage file
             }

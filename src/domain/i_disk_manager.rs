@@ -114,7 +114,7 @@ pub(crate) trait IDiskManager: Sync + Send {
     fn get_working_directory(&self) -> String;
 
     /// Get boot sector
-    fn get_boot_sector(&self) -> BootSector;
+    fn get_boot_sector(&self) -> &BootSector;
 
     /// Returns the free space in the disk with respect to the total number of empty clusters
     fn get_free_space(&mut self) -> u64;
