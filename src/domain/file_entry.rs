@@ -1,33 +1,54 @@
 use crate::infrastructure::disk_manager::ByteArray;
 use chrono::{DateTime, Datelike, LocalResult, TimeZone, Timelike, Utc};
 use std::fmt::Display;
-use std::ops::BitOr;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum FileEntryAttributes {
-    Implicit = 0x00,
-    ReadOnly = 0x01,
-    Hidden = 0x02,
-    File = 0x04,
+pub(crate) enum FileEntryAttributesFlags {
+    Mode = 0x01,
+    Visibility = 0x02,
+    Type = 0x04,
 }
 
-impl BitOr for FileEntryAttributes {
-    type Output = u8;
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FileEntryAttributes {
+    /// Read-only file: `set bit`
+    ReadOnly,
+    /// Read-write file: `unset bit`
+    ReadWrite,
+    /// Hidden file: `set bit`
+    Hidden,
+    /// Visible file: `unset bit`
+    Visible,
+    /// File: `set bit`
+    File,
+    /// Directory: `unset bit`
+    Directory,
+}
 
-    fn bitor(self, rhs: Self) -> Self::Output {
-        self as u8 | rhs as u8
+impl Into<u8> for FileEntryAttributes {
+    fn into(self) -> u8 {
+        match self {
+            FileEntryAttributes::ReadOnly => 0x01,
+            FileEntryAttributes::ReadWrite => 0x00,
+            FileEntryAttributes::Hidden => 0x02,
+            FileEntryAttributes::Visible => 0x00,
+            FileEntryAttributes::File => 0x04,
+            FileEntryAttributes::Directory => 0x00,
+        }
     }
 }
 
 impl FromStr for FileEntryAttributes {
-    type Err = ();
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "-w" => Ok(FileEntryAttributes::ReadOnly),
+            "+w" => Ok(FileEntryAttributes::ReadWrite),
+            "-h" => Ok(FileEntryAttributes::Visible),
             "+h" => Ok(FileEntryAttributes::Hidden),
-            _ => Ok(FileEntryAttributes::Implicit),
+            _ => Err(format!("Invalid attribute {}", s)),
         }
     }
 }
@@ -80,22 +101,60 @@ impl FileEntry {
         }
     }
 
+    pub(crate) fn apply_attributes(&mut self, attributes: &Vec<FileEntryAttributes>) {
+        for attribute in attributes {
+            match attribute {
+                FileEntryAttributes::ReadOnly => {
+                    let mode_bit = self.attributes & FileEntryAttributesFlags::Mode as u8;
+
+                    if mode_bit == 0 {
+                        self.attributes |= FileEntryAttributesFlags::Mode as u8;
+                    }
+                }
+                FileEntryAttributes::ReadWrite => {
+                    let mode_bit = self.attributes & FileEntryAttributesFlags::Mode as u8;
+
+                    if mode_bit != 0 {
+                        self.attributes &= !(FileEntryAttributesFlags::Mode as u8);
+                    }
+                }
+                FileEntryAttributes::Hidden => {
+                    let visibility_bit =
+                        self.attributes & FileEntryAttributesFlags::Visibility as u8;
+
+                    if visibility_bit == 0 {
+                        self.attributes |= FileEntryAttributesFlags::Visibility as u8;
+                    }
+                }
+                FileEntryAttributes::Visible => {
+                    let visibility_bit =
+                        self.attributes & FileEntryAttributesFlags::Visibility as u8;
+
+                    if visibility_bit != 0 {
+                        self.attributes &= !(FileEntryAttributesFlags::Visibility as u8);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub(crate) fn get_attributes_as_string(&self) -> String {
         let mut result = String::new();
 
-        if self.attributes & FileEntryAttributes::File as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Type as u8 != 0 {
             result.push('f');
         } else {
             result.push('d');
         }
 
-        if self.attributes & FileEntryAttributes::ReadOnly as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Mode as u8 != 0 {
             result.push('r');
         } else {
             result.push('w');
         }
 
-        if self.attributes & FileEntryAttributes::Hidden as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Visibility as u8 != 0 {
             result.push('h');
         } else {
             result.push('v');
@@ -123,15 +182,15 @@ impl FileEntry {
     }
 
     pub(crate) fn is_file(&self) -> bool {
-        self.attributes & FileEntryAttributes::File as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Type as u8 != 0
     }
 
     pub(crate) fn is_hidden(&self) -> bool {
-        self.attributes & FileEntryAttributes::Hidden as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Visibility as u8 != 0
     }
 
     pub(crate) fn is_read_only(&self) -> bool {
-        self.attributes & FileEntryAttributes::ReadOnly as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Mode as u8 != 0
     }
 }
 

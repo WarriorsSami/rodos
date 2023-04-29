@@ -48,7 +48,7 @@ terminator = "$"
     name = "rename"
     description = "Rename a file or a directory"
     usage = "rename <old_name> <new_name>"
-    regex = "^\\s*rename\\s+(?P<old_name>\\S+)\\.(?P<old_extension>\\S+)\\s+(?P<new_name>\\S+)\\.(?P<new_extension>\\S+)\\s*$"
+    regex = "^\\s*rename\\s+(?P<old_name>[a-zA-Z0-9_]+)(\\.(?P<old_extension>\\S+))?\\s+(?P<new_name>[a-zA-Z0-9_]+)(\\.(?P<new_extension>\\S+))?\\s*$"
 
     [commands.del]
     name = "del"

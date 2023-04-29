@@ -74,7 +74,7 @@ impl Default for Config {
                 name: "rename".to_string(),
                 description: "Rename a file or a directory".to_string(),
                 usage: "rename <old_name> <new_name>".to_string(),
-                regex: r"^\s*rename\s+(?P<old_name>\S+)\.(?P<old_extension>\S+)\s+(?P<new_name>\S+)\.(?P<new_extension>\S+)\s*$".to_string(),
+                regex: r"^\s*rename\s+(?P<old_name>[a-zA-Z0-9_]+)(\.(?P<old_extension>\S+))?\s+(?P<new_name>[a-zA-Z0-9_]+)(\.(?P<new_extension>\S+))?\s*$".to_string(),
             },
         );
 

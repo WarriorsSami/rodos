@@ -188,33 +188,70 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let old_name = captures.name("old_name").unwrap().as_str();
-            let old_extension = captures.name("old_extension").unwrap().as_str();
+            let old_extension = captures.name("old_extension");
             let new_name = captures.name("new_name").unwrap().as_str();
-            let new_extension = captures.name("new_extension").unwrap().as_str();
+            let new_extension = captures.name("new_extension");
 
-            if old_name.len() > 8 {
-                return Err(Box::try_from("Old name must be 8 characters or less!").unwrap());
+            match (old_extension, new_extension) {
+                (Some(old_extension), Some(new_extension)) => {
+                    let old_extension = old_extension.as_str();
+                    let new_extension = new_extension.as_str();
+
+                    if old_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Old name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if old_extension.len() > 3 {
+                        return Err(
+                            Box::try_from("Old extension must be 3 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_name.len() > 8 {
+                        return Err(
+                            Box::try_from("New name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_extension.len() > 3 {
+                        return Err(
+                            Box::try_from("New extension must be 3 characters or less!").unwrap()
+                        );
+                    }
+
+                    log::info!("Rename command parsed successfully: {}", input);
+                    Ok(RenameRequest::new(
+                        old_name.to_string(),
+                        old_extension.to_string(),
+                        new_name.to_string(),
+                        new_extension.to_string(),
+                    ))
+                }
+                (None, None) => {
+                    if old_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Old name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_name.len() > 8 {
+                        return Err(
+                            Box::try_from("New name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    log::info!("Rename command parsed successfully: {}", input);
+                    Ok(RenameRequest::new(
+                        old_name.to_string(),
+                        "".to_string(),
+                        new_name.to_string(),
+                        "".to_string(),
+                    ))
+                }
+                _ => Err(Box::try_from("Cannot rename a folder as a file or vice versa!").unwrap()),
             }
-
-            if old_extension.len() > 3 {
-                return Err(Box::try_from("Old extension must be 3 characters or less!").unwrap());
-            }
-
-            if new_name.len() > 8 {
-                return Err(Box::try_from("New name must be 8 characters or less!").unwrap());
-            }
-
-            if new_extension.len() > 3 {
-                return Err(Box::try_from("New extension must be 3 characters or less!").unwrap());
-            }
-
-            log::info!("Rename command parsed successfully: {}", input);
-            Ok(RenameRequest::new(
-                old_name.to_string(),
-                old_extension.to_string(),
-                new_name.to_string(),
-                new_extension.to_string(),
-            ))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid rename command syntax!").unwrap())
@@ -387,9 +424,7 @@ impl CliParser {
                 .collect::<Vec<_>>()
                 .iter()
                 .map(|attr_str| attr_str.parse::<FileEntryAttributes>().unwrap())
-                .collect::<Vec<_>>()
-                .iter()
-                .fold(0, |state, attr| state | *attr as u8);
+                .collect::<Vec<_>>();
 
             Ok(SetAttributesRequest::new(
                 name.to_string(),

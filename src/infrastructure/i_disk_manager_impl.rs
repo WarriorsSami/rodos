@@ -83,7 +83,9 @@ impl IDiskManager for DiskManager {
             request.file_extension.to_owned(),
             request.file_size.to_owned(),
             first_cluster as u16,
-            FileEntryAttributes::File as u8,
+            FileEntryAttributes::File as u8
+                | FileEntryAttributes::Visible as u8
+                | FileEntryAttributes::ReadWrite as u8,
             Utc::now(),
             Some(Box::new(self.working_directory.clone())),
             None,
@@ -193,51 +195,143 @@ impl IDiskManager for DiskManager {
         Ok(file_entries)
     }
 
-    // TODO: add support for files in subdirectories
     fn rename_file(&mut self, request: &RenameRequest) -> Void {
-        // check if the old file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.old_name && file_entry.extension == request.old_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.old_name, request.old_extension
-            ))
-            .unwrap());
+        // TODO: refactor this hard coded root path
+        match self.working_directory.name == "/" {
+            false => {
+                // check if the old file exists in root table
+                if !self
+                    .get_root_table_for_working_directory()
+                    .iter()
+                    .any(|file_entry| {
+                        file_entry.name == request.old_name
+                            && file_entry.extension == request.old_extension
+                    })
+                {
+                    let error_message = match request.old_extension.is_empty() {
+                        true => format!("Directory {} does not exist", request.old_name),
+                        false => format!(
+                            "File {}.{} does not exist",
+                            request.old_name, request.old_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // check if a file with the new name already exists in root table
+                if self
+                    .get_root_table_for_working_directory()
+                    .iter()
+                    .any(|file_entry| {
+                        file_entry.name == request.new_name
+                            && file_entry.extension == request.new_extension
+                    })
+                {
+                    let error_message = match request.new_extension.is_empty() {
+                        true => format!("Directory {} already exists", request.new_name),
+                        false => format!(
+                            "File {}.{} already exists",
+                            request.new_name, request.new_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // get the index of the file entry in root table
+                let root_table = self.get_root_table_for_working_directory();
+
+                let file_entry_index = root_table
+                    .iter()
+                    .position(|file_entry| {
+                        file_entry.name == request.old_name
+                            && file_entry.extension == request.old_extension
+                    })
+                    .unwrap();
+
+                // check if the file is read only
+                if root_table[file_entry_index].is_read_only() {
+                    let error_message = match request.old_extension.is_empty() {
+                        true => format!("Directory {} is read only", request.old_name),
+                        false => format!(
+                            "File {}.{} is read only",
+                            request.old_name, request.old_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // rename the file in root table
+                root_table[file_entry_index].name = request.new_name.to_owned();
+                root_table[file_entry_index].extension = request.new_extension.to_owned();
+                root_table[file_entry_index].last_modification_datetime = Utc::now();
+
+                self.sync_directory_to_storage(&self.working_directory.clone());
+            }
+            true => {
+                // check if the old file exists in root table
+                if !self.root.iter().any(|file_entry| {
+                    file_entry.name == request.old_name
+                        && file_entry.extension == request.old_extension
+                }) {
+                    let error_message = match request.old_extension.is_empty() {
+                        true => format!("Directory {} does not exist", request.old_name),
+                        false => format!(
+                            "File {}.{} does not exist",
+                            request.old_name, request.old_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // check if a file with the new name already exists in root table
+                if self.root.iter().any(|file_entry| {
+                    file_entry.name == request.new_name
+                        && file_entry.extension == request.new_extension
+                }) {
+                    let error_message = match request.new_extension.is_empty() {
+                        true => format!("Directory {} already exists", request.new_name),
+                        false => format!(
+                            "File {}.{} already exists",
+                            request.new_name, request.new_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // get the index of the file entry in root table
+                let file_entry_index = self
+                    .root
+                    .iter()
+                    .position(|file_entry| {
+                        file_entry.name == request.old_name
+                            && file_entry.extension == request.old_extension
+                    })
+                    .unwrap();
+
+                // check if the file is read only
+                if self.root[file_entry_index].is_read_only() {
+                    let error_message = match request.old_extension.is_empty() {
+                        true => format!("Directory {} is read only", request.old_name),
+                        false => format!(
+                            "File {}.{} is read only",
+                            request.old_name, request.old_extension
+                        ),
+                    };
+
+                    return Err(Box::try_from(error_message).unwrap());
+                }
+
+                // rename the file in root table
+                self.root[file_entry_index].name = request.new_name.to_owned();
+                self.root[file_entry_index].extension = request.new_extension.to_owned();
+                self.root[file_entry_index].last_modification_datetime = Utc::now();
+            }
         }
-
-        // check if a file with the new name already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.new_name && file_entry.extension == request.new_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} already exists",
-                request.new_name, request.new_extension
-            ))
-            .unwrap());
-        }
-
-        // get the index of the file entry in root
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.old_name && file_entry.extension == request.old_extension
-            })
-            .unwrap();
-
-        // check if the file is read only
-        if self.root[file_entry_index].is_read_only() {
-            return Err(Box::try_from(format!(
-                "File {}.{} is read only",
-                request.old_name, request.old_extension
-            ))
-            .unwrap());
-        }
-
-        // rename the file in root
-        self.root[file_entry_index].name = request.new_name.to_owned();
-        self.root[file_entry_index].extension = request.new_extension.to_owned();
 
         Ok(())
     }
@@ -463,11 +557,7 @@ impl IDiskManager for DiskManager {
                 .unwrap_or_default();
 
             // set the attributes
-            // persist the file entry type (file or folder)
-            // as the attributes from the request are only related to hidden or read only flags
-            let file_entry_type_attr =
-                self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
-            self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
+            self.root[file_entry_index].apply_attributes(&request.attributes);
             self.root[file_entry_index].last_modification_datetime = Utc::now();
         } else {
             let file_entry = self
@@ -479,8 +569,7 @@ impl IDiskManager for DiskManager {
                 .unwrap();
 
             // set the attributes
-            let file_entry_type_attr = file_entry.attributes & FileEntryAttributes::File as u8;
-            file_entry.attributes = file_entry_type_attr | request.attributes;
+            file_entry.apply_attributes(&request.attributes);
             file_entry.last_modification_datetime = Utc::now();
 
             // persist the file entry modifications into the storage
@@ -599,7 +688,9 @@ impl IDiskManager for DiskManager {
             "".to_string(),
             (self.boot_sector.root_entry_cell_size * 2) as u32,
             first_cluster_index,
-            0_u8,
+            FileEntryAttributes::Directory as u8
+                | FileEntryAttributes::Visible as u8
+                | FileEntryAttributes::ReadWrite as u8,
             Utc::now(),
             Some(Box::new(self.working_directory.clone())),
             Some(Vec::new()),
@@ -607,13 +698,16 @@ impl IDiskManager for DiskManager {
 
         let mut dot_dir_entry = dir_file_entry.clone();
         dot_dir_entry.name = ".".to_string();
-        dot_dir_entry.attributes = FileEntryAttributes::Hidden | FileEntryAttributes::ReadOnly;
+        dot_dir_entry.attributes = FileEntryAttributes::Directory as u8
+            | FileEntryAttributes::Hidden as u8
+            | FileEntryAttributes::ReadOnly as u8;
 
         let mut double_dot_dir_entry = self.working_directory.clone();
         double_dot_dir_entry.name = "..".to_string();
         double_dot_dir_entry.extension = "".to_string();
-        double_dot_dir_entry.attributes =
-            FileEntryAttributes::Hidden | FileEntryAttributes::ReadOnly;
+        double_dot_dir_entry.attributes = FileEntryAttributes::Directory as u8
+            | FileEntryAttributes::Hidden as u8
+            | FileEntryAttributes::ReadOnly as u8;
 
         dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
 

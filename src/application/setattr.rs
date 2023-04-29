@@ -1,16 +1,21 @@
 use crate::application::Void;
 use crate::core::Arm;
+use crate::domain::file_entry::FileEntryAttributes;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
 pub(crate) struct SetAttributesRequest {
     pub(crate) name: String,
     pub(crate) extension: String,
-    pub(crate) attributes: u8,
+    pub(crate) attributes: Vec<FileEntryAttributes>,
 }
 
 impl SetAttributesRequest {
-    pub(crate) fn new(name: String, extension: String, attributes: u8) -> Self {
+    pub(crate) fn new(
+        name: String,
+        extension: String,
+        attributes: Vec<FileEntryAttributes>,
+    ) -> Self {
         Self {
             name,
             extension,
@@ -34,7 +39,7 @@ impl SetAttributesHandler {
 impl RequestHandler<SetAttributesRequest, Void> for SetAttributesHandler {
     fn handle(&mut self, request: SetAttributesRequest) -> Void {
         log::info!(
-            "Setting attributes {} for file {}",
+            "Setting attributes {:?} for file {}",
             request.attributes,
             request.name
         );
