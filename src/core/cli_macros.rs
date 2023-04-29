@@ -57,7 +57,7 @@ macro_rules! warn {
 macro_rules! info {
     ($fmt:expr $(, $arg:tt)*) => {
         let s = format!($fmt $(, $arg)*);
-        cprintln!("<c>{}</>", s);
+        cprintln!("<c!>{}</>", s);
     };
 }
 

@@ -9,6 +9,7 @@ use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
 use crate::application::mkdir::MakeDirectoryHandler;
 use crate::application::neofetch::NeofetchHandler;
+use crate::application::pwd::PwdHandler;
 use crate::application::rename::RenameHandler;
 use crate::application::setattr::SetAttributesHandler;
 use crate::core::cli_parser::CliParser;
@@ -102,6 +103,7 @@ lazy_static! {
         .add_handler(SetAttributesHandler::new(DISK_ARC.clone()))
         .add_handler(MakeDirectoryHandler::new(DISK_ARC.clone()))
         .add_handler(ChangeDirectoryHandler::new(DISK_ARC.clone()))
+        .add_handler(PwdHandler::new(DISK_ARC.clone()))
         .build();
 }
 
@@ -187,6 +189,7 @@ fn main() {
                 "Directory created successfully!"
             ),
             "cd" => handle!(mediator, parse_cd, input.as_str()),
+            "pwd" => handle!(mediator, parse_pwd, input.as_str()),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => handle!(
                 parse_exit,

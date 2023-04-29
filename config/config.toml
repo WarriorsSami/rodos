@@ -97,3 +97,9 @@ terminator = "$"
     description = "Change the current directory"
     usage = "cd <directory_name>"
     regex = "^\\s*cd\\s+(?P<name>\\S+)\\s*$"
+
+    [commands.pwd]
+    name = "pwd"
+    description = "Display the current directory"
+    usage = "pwd"
+    regex = "^\\s*pwd\\s*$"

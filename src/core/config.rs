@@ -160,6 +160,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "pwd".to_string(),
+            Command {
+                name: "pwd".to_string(),
+                description: "Display the current directory".to_string(),
+                usage: "pwd".to_string(),
+                regex: r"^\s*pwd\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

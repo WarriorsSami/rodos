@@ -9,6 +9,7 @@ use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
 use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::neofetch::NeofetchRequest;
+use crate::application::pwd::PwdRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
@@ -475,6 +476,19 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid cd command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_pwd(input: &str) -> Result<PwdRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("pwd").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("pwd").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            log::info!("Pwd command parsed successfully: {}", input);
+            Ok(PwdRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid pwd command syntax!").unwrap())
         }
     }
 }
