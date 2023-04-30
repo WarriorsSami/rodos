@@ -1,6 +1,7 @@
 use crate::infrastructure::disk_manager::ByteArray;
 use chrono::{DateTime, Datelike, LocalResult, TimeZone, Timelike, Utc};
 use std::fmt::Display;
+use std::ops::BitOr;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy)]
@@ -26,6 +27,15 @@ pub(crate) enum FileEntryAttributes {
     Directory,
 }
 
+impl FileEntryAttributes {
+    pub(crate) fn combine(attributes: &[FileEntryAttributes]) -> u8 {
+        attributes.iter().fold(0, |acc, x| {
+            let x: u8 = (*x).into();
+            acc | x
+        })
+    }
+}
+
 impl Into<u8> for FileEntryAttributes {
     fn into(self) -> u8 {
         match self {
@@ -36,6 +46,17 @@ impl Into<u8> for FileEntryAttributes {
             FileEntryAttributes::File => 0x04,
             FileEntryAttributes::Directory => 0x00,
         }
+    }
+}
+
+impl BitOr for FileEntryAttributes {
+    type Output = u8;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        let lhs: u8 = self.into();
+        let rhs: u8 = rhs.into();
+
+        lhs | rhs
     }
 }
 

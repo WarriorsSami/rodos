@@ -83,9 +83,11 @@ impl IDiskManager for DiskManager {
             request.file_extension.to_owned(),
             request.file_size.to_owned(),
             first_cluster as u16,
-            FileEntryAttributes::File as u8
-                | FileEntryAttributes::Visible as u8
-                | FileEntryAttributes::ReadWrite as u8,
+            FileEntryAttributes::combine(&[
+                FileEntryAttributes::File,
+                FileEntryAttributes::ReadWrite,
+                FileEntryAttributes::Visible,
+            ]),
             Utc::now(),
             Some(Box::new(self.working_directory.clone())),
             None,
@@ -695,9 +697,11 @@ impl IDiskManager for DiskManager {
             "".to_string(),
             (self.boot_sector.root_entry_cell_size * 2) as u32,
             first_cluster_index,
-            FileEntryAttributes::Directory as u8
-                | FileEntryAttributes::Visible as u8
-                | FileEntryAttributes::ReadWrite as u8,
+            FileEntryAttributes::combine(&[
+                FileEntryAttributes::Directory,
+                FileEntryAttributes::ReadWrite,
+                FileEntryAttributes::Visible,
+            ]),
             Utc::now(),
             Some(Box::new(self.working_directory.clone())),
             Some(Vec::new()),
@@ -705,16 +709,20 @@ impl IDiskManager for DiskManager {
 
         let mut dot_dir_entry = dir_file_entry.clone();
         dot_dir_entry.name = ".".to_string();
-        dot_dir_entry.attributes = FileEntryAttributes::Directory as u8
-            | FileEntryAttributes::Hidden as u8
-            | FileEntryAttributes::ReadOnly as u8;
+        dot_dir_entry.attributes = FileEntryAttributes::combine(&[
+            FileEntryAttributes::Directory,
+            FileEntryAttributes::ReadOnly,
+            FileEntryAttributes::Hidden,
+        ]);
 
         let mut double_dot_dir_entry = self.working_directory.clone();
         double_dot_dir_entry.name = "..".to_string();
         double_dot_dir_entry.extension = "".to_string();
-        double_dot_dir_entry.attributes = FileEntryAttributes::Directory as u8
-            | FileEntryAttributes::Hidden as u8
-            | FileEntryAttributes::ReadOnly as u8;
+        double_dot_dir_entry.attributes = FileEntryAttributes::combine(&[
+            FileEntryAttributes::Directory,
+            FileEntryAttributes::ReadOnly,
+            FileEntryAttributes::Hidden,
+        ]);
 
         dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
 
