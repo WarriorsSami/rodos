@@ -348,15 +348,18 @@ impl DiskManager {
             .collect::<Vec<u8>>()
     }
 
-    pub(in crate::infrastructure) fn sync_directory_to_storage(&mut self, directory: &FileEntry) {
+    pub(in crate::infrastructure) fn sync_directory_root_table_to_storage(
+        &mut self,
+        dir_entry: &FileEntry,
+    ) {
         // free old working directory data
-        self.free_clusters_and_entry(directory);
+        self.free_clusters(dir_entry);
 
         // get updated working directory data
-        let mut directory_data = Self::get_directory_root_table_as_data(directory);
+        let mut directory_data = Self::get_directory_root_table_as_data(dir_entry);
 
         // update fat and storage buffer
-        let mut current_cluster_index = directory.first_cluster;
+        let mut current_cluster_index = dir_entry.first_cluster;
 
         while !directory_data.is_empty() {
             let mut cluster_data: ByteArray = Vec::new();
@@ -421,7 +424,6 @@ impl DiskManager {
                 root_table.push(file_entry_result);
             } else {
                 self.link_root_table_to_directory(&mut file_entry_result);
-                // self.sync_directory_to_storage(&file_entry_result);
                 root_table.push(file_entry_result);
             }
 
@@ -435,14 +437,14 @@ impl DiskManager {
             .map(|entry| entry.size)
             .sum::<u32>();
 
-        // TODO: sync to storage
         directory_entry.size =
             size_of_files + (self.boot_sector.root_entry_cell_size * cnt_dirs) as u32;
         directory_entry.children_entries = Some(root_table.clone());
-        self.sync_directory_to_storage(directory_entry);
+        self.sync_directory_root_table_to_storage(directory_entry);
     }
 
-    pub(in crate::infrastructure) fn free_clusters_and_entry(&mut self, file_entry: &FileEntry) {
+    pub(in crate::infrastructure) fn free_clusters(&mut self, file_entry: &FileEntry) {
+        // delete file entry associated data
         let mut cluster_index = file_entry.first_cluster as usize;
         while self.fat[cluster_index] != FatValue::EndOfChain {
             let next_cluster_index: u16 = self.fat[cluster_index].clone().into();
@@ -450,17 +452,26 @@ impl DiskManager {
             cluster_index = next_cluster_index as usize;
         }
         self.fat[cluster_index] = FatValue::Free;
+    }
 
-        // if self.working_directory.name == "/" {
-        //     let file_entry_index = self
-        //         .root
-        //         .iter()
-        //         .position(|entry| {
-        //             entry.name == file_entry.name && entry.extension == file_entry.extension
-        //         })
-        //         .unwrap();
-        //     self.root[file_entry_index] = FileEntry::default();
-        // }
+    pub(in crate::infrastructure) fn free_file_entry(&mut self, file_entry: &FileEntry) {
+        // delete the actual file entry
+        match self.working_directory.name == "/" {
+            true => {
+                let file_entry_index = self.root.iter().position(|entry| {
+                    entry.name == file_entry.name && entry.extension == file_entry.extension
+                });
+                if let Some(file_entry_index) = file_entry_index {
+                    self.root[file_entry_index] = FileEntry::default();
+                }
+            }
+            false => {
+                self.get_root_table_for_working_directory().retain(|entry| {
+                    !(entry.name == file_entry.name && entry.extension == file_entry.extension)
+                });
+                self.sync_directory_root_table_to_storage(&self.working_directory.clone());
+            }
+        }
     }
 
     pub(in crate::infrastructure) fn write_to_temp(file_content: &str) -> Void {

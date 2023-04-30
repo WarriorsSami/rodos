@@ -124,7 +124,8 @@ impl IDiskManager for DiskManager {
                 None => {
                     // mark the current cluster as end of chain and free the chain cluster and the file entry
                     self.fat[current_cluster_index] = FatValue::EndOfChain;
-                    self.free_clusters_and_entry(&file_entry);
+                    self.free_clusters(&file_entry);
+                    self.free_file_entry(&file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
             }
@@ -268,7 +269,7 @@ impl IDiskManager for DiskManager {
                 root_table[file_entry_index].extension = request.new_extension.to_owned();
                 root_table[file_entry_index].last_modification_datetime = Utc::now();
 
-                self.sync_directory_to_storage(&self.working_directory.clone());
+                self.sync_directory_root_table_to_storage(&self.working_directory.clone());
             }
             true => {
                 // check if the old file exists in root table
@@ -338,9 +339,14 @@ impl IDiskManager for DiskManager {
 
     fn delete_file(&mut self, request: &DeleteRequest) -> Void {
         // check if the file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
+        if !self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.file_name
+                    && file_entry.extension == request.file_extension
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} does not exist",
                 request.file_name, request.file_extension
@@ -349,17 +355,18 @@ impl IDiskManager for DiskManager {
         }
 
         // get the file entry index in root
-        let file_entry_index = self
-            .root
+        let file_entry = self
+            .get_root_table_for_working_directory()
             .iter()
-            .position(|file_entry| {
+            .find(|file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
             })
-            .unwrap_or_default();
+            .cloned()
+            .unwrap();
 
         // check if it is read only
-        if self.root[file_entry_index].is_read_only() {
+        if file_entry.is_read_only() {
             return Err(Box::try_from(format!(
                 "File {}.{} is read only",
                 request.file_name, request.file_extension
@@ -368,8 +375,8 @@ impl IDiskManager for DiskManager {
         }
 
         // delete the file in root and free the cluster chain in fat
-        let file_entry = self.root[file_entry_index].clone();
-        self.free_clusters_and_entry(&file_entry);
+        self.free_clusters(&file_entry);
+        self.free_file_entry(&file_entry);
 
         Ok(())
     }
@@ -573,7 +580,7 @@ impl IDiskManager for DiskManager {
             file_entry.last_modification_datetime = Utc::now();
 
             // persist the file entry modifications into the storage
-            self.sync_directory_to_storage(&self.working_directory.clone());
+            self.sync_directory_root_table_to_storage(&self.working_directory.clone());
         }
 
         Ok(())
@@ -744,7 +751,8 @@ impl IDiskManager for DiskManager {
                 None => {
                     // mark the current cluster as end of chain and free the chain cluster and the file entry
                     self.fat[current_cluster_index] = FatValue::EndOfChain;
-                    self.free_clusters_and_entry(&dir_file_entry);
+                    self.free_clusters(&dir_file_entry);
+                    self.free_file_entry(&dir_file_entry);
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
             }
