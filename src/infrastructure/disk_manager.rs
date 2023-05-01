@@ -476,7 +476,6 @@ impl DiskManager {
                 self.get_root_table_for_working_directory().retain(|entry| {
                     !(entry.name == file_entry.name && entry.extension == file_entry.extension)
                 });
-                self.sync_directory_root_table_to_storage(&self.working_directory.clone());
             }
         }
     }
@@ -608,6 +607,7 @@ impl DiskManager {
                 match entry.is_file() {
                     true => {
                         // get file content
+                        self.pull_sync();
                         let cat_request =
                             CatRequest::new(entry.name.clone(), entry.extension.clone());
                         let file_content = self.get_file_content(&cat_request)?;

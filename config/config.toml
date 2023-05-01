@@ -103,3 +103,9 @@ terminator = "$"
     description = "Display the current directory"
     usage = "pwd"
     regex = "^\\s*pwd\\s*$"
+
+    [commands.rmdir]
+    name = "rmdir"
+    description = "Delete a directory"
+    usage = "rmdir <directory_name>"
+    regex = "^\\s*rmdir\\s+(?P<name>\\S+)\\s*$"

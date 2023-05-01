@@ -170,6 +170,16 @@ impl Default for Config {
             },
         );
 
+        commands.insert(
+            "rmdir".to_string(),
+            Command {
+                name: "rmdir".to_string(),
+                description: "Delete a directory".to_string(),
+                usage: "rmdir <directory_name>".to_string(),
+                regex: r"^\s*rmdir\s+(?P<name>\S+)\s*$".to_string(),
+            },
+        );
+
         Self {
             os: "RoDOS".to_string(),
             version: "0.1.0".to_string(),

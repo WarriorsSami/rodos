@@ -190,6 +190,12 @@ fn main() {
             ),
             "cd" => handle!(mediator, parse_cd, input.as_str()),
             "pwd" => handle!(mediator, parse_pwd, input.as_str()),
+            "rmdir" => handle!(
+                mediator,
+                parse_rmdir,
+                input.as_str(),
+                "Directory deleted successfully!"
+            ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => handle!(
                 parse_exit,

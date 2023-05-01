@@ -547,4 +547,25 @@ impl CliParser {
             Err(Box::try_from("Invalid pwd command syntax!").unwrap())
         }
     }
+
+    pub(crate) fn parse_rmdir(input: &str) -> Result<DeleteRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("rmdir").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("rmdir").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Rmdir command parsed successfully: {}", input);
+            Ok(DeleteRequest::new(name.to_string(), "".to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid rmdir command syntax!").unwrap())
+        }
+    }
 }

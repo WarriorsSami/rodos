@@ -123,6 +123,8 @@ impl IDiskManager for DiskManager {
                     self.fat[current_cluster_index] = FatValue::EndOfChain;
                     self.free_clusters(&file_entry);
                     self.free_file_entry(&file_entry);
+                    self.sync_directory_root_table_to_storage(&self.working_directory.clone());
+
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
             }
@@ -334,47 +336,69 @@ impl IDiskManager for DiskManager {
     }
 
     fn delete_file(&mut self, request: &DeleteRequest) -> Void {
-        // check if the file exists in root
+        // check if the file exists in the root table of the working directory
         if !self
             .get_root_table_for_working_directory()
             .iter()
             .any(|file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
-                    && file_entry.is_file()
             })
         {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
+            let error_message = match request.file_extension.is_empty() {
+                true => format!("Directory {} does not exist", request.file_name),
+                false => format!(
+                    "File {}.{} does not exist",
+                    request.file_name, request.file_extension
+                ),
+            };
+            return Err(Box::try_from(error_message).unwrap());
         }
 
-        // get the file entry index in root
+        // get the file entry from the root table of the working directory
         let file_entry = self
             .get_root_table_for_working_directory()
             .iter()
             .find(|file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
-                    && file_entry.is_file()
             })
             .cloned()
             .unwrap();
 
-        // check if it is read only
-        if file_entry.is_read_only() {
-            return Err(Box::try_from(format!(
-                "File {}.{} is read only",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
+        // if folder, iterate over its root table and delete all files and folders recursively
+        if !file_entry.is_file() {
+            // change working directory to the folder
+            let cd_request = ChangeDirectoryRequest::new(request.file_name.to_owned());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
+
+            // recursively delete all files and folders in the folder
+            let root_table = self.get_root_table_for_working_directory().clone();
+            for file_entry in root_table {
+                if file_entry.name == "." || file_entry.name == ".." {
+                    continue;
+                }
+
+                let delete_request =
+                    DeleteRequest::new(file_entry.name.to_owned(), file_entry.extension.to_owned());
+                self.delete_file(&delete_request)?;
+            }
+
+            // change working directory back
+            let cd_request = ChangeDirectoryRequest::new("..".to_owned());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
         }
 
-        // delete the file in root and free the cluster chain in fat
+        // delete the file in the root table and free the cluster chain in fat
+        self.pull_sync();
         self.free_clusters(&file_entry);
         self.free_file_entry(&file_entry);
+
+        if !self.working_directory.is_root() {
+            self.sync_directory_root_table_to_storage(&self.working_directory.clone());
+        }
 
         Ok(())
     }
@@ -784,6 +808,8 @@ impl IDiskManager for DiskManager {
                     self.fat[current_cluster_index] = FatValue::EndOfChain;
                     self.free_clusters(&dir_file_entry);
                     self.free_file_entry(&dir_file_entry);
+                    self.sync_directory_root_table_to_storage(&self.working_directory.clone());
+
                     return Err(Box::try_from("No space in fat".to_string()).unwrap());
                 }
             }
