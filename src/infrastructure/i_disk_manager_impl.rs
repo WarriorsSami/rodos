@@ -347,6 +347,7 @@ impl IDiskManager for DiskManager {
             .any(|file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
+                    && file_entry.is_file()
             })
         {
             return Err(Box::try_from(format!(
@@ -363,6 +364,7 @@ impl IDiskManager for DiskManager {
             .find(|file_entry| {
                 file_entry.name == request.file_name
                     && file_entry.extension == request.file_extension
+                    && file_entry.is_file()
             })
             .cloned()
             .unwrap();
