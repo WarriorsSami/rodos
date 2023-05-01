@@ -296,7 +296,7 @@ impl DiskManager {
         self.root = root_table;
         self.sync_to_file();
 
-        if self.working_directory.name == "/" {
+        if self.working_directory.is_root() {
             self.working_directory.parent_entry = None;
             self.working_directory.children_entries = Some(self.root.clone());
         } else {
@@ -462,7 +462,7 @@ impl DiskManager {
 
     pub(in crate::infrastructure) fn free_file_entry(&mut self, file_entry: &FileEntry) {
         // delete the actual file entry
-        match self.working_directory.name == "/" {
+        match self.working_directory.is_root() {
             true => {
                 let file_entry_index = self.root.iter().position(|entry| {
                     entry.name == file_entry.name && entry.extension == file_entry.extension
@@ -558,7 +558,7 @@ impl DiskManager {
     pub(in crate::infrastructure) fn get_root_table_for_working_directory(
         &mut self,
     ) -> &mut RootTable {
-        match self.working_directory.name == "/" {
+        match self.working_directory.is_root() {
             true => &mut self.root,
             false => self.working_directory.children_entries.as_mut().unwrap(),
         }
@@ -568,7 +568,7 @@ impl DiskManager {
         &mut self,
         file_entry: FileEntry,
     ) -> Void {
-        match self.working_directory.name == "/" {
+        match self.working_directory.is_root() {
             true => {
                 let dir_file_entry_index = self
                     .root

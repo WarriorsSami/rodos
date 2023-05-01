@@ -51,7 +51,7 @@ impl IDiskManager for DiskManager {
         }
 
         // check if there is enough space in root
-        if self.working_directory.name == "/"
+        if self.working_directory.is_root()
             && self
                 .root
                 .iter()
@@ -194,8 +194,7 @@ impl IDiskManager for DiskManager {
     }
 
     fn rename_file(&mut self, request: &RenameRequest) -> Void {
-        // TODO: refactor this hard coded root path
-        match self.working_directory.name == "/" {
+        match self.working_directory.is_root() {
             false => {
                 // check if the old file exists in root table
                 if !self
@@ -552,7 +551,7 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        if self.working_directory.name == "/" {
+        if self.working_directory.is_root() {
             // get the file entry
             let file_entry_index = self
                 .root

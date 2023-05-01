@@ -122,6 +122,10 @@ impl FileEntry {
         }
     }
 
+    pub(crate) fn is_root(&self) -> bool {
+        self.name == "/"
+    }
+
     pub(crate) fn apply_attributes(&mut self, attributes: &Vec<FileEntryAttributes>) {
         for attribute in attributes {
             match attribute {
