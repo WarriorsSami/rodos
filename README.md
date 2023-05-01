@@ -41,18 +41,6 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     - allocate the required number of clusters
     - if `stdin` is specified, the user can write the content of the file in a separate file simulating the stdin
     and then the content of the file is copied in the new file
-  - **add** `file_name` `dimension/none` `alfa/num/stdin` - add content to a file:
-    ```bash
-    rouser@rodos:~$ add a.txt 20 alfa
-    
-    a.txt file content:
-    ABCDEFGHIJKLMNOPQRST
-    ABCDEFGHIJKLMNOPQRST
-    ```
-    - add the content to the end of the file
-    - allocate the required number of clusters
-    - if `stdin` is specified, the user can write the content of the file in a separate file simulating the stdin
-    and then the content of the file is copied in the new file
   - **cp** `src_name` `dest_name` - copy a file:
     ```bash
     rouser@rodos:~$ copy a.txt b.txt
@@ -114,10 +102,40 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
   ```
   - format the disk
   - possible FAT types: fat16, fat32
-- **folders**:
-  - folders are just files with the folder attribute
-  - inside the storage cluster of a folder there is a list of file entries similar to root
-  - commands: mkdir, cd, rmdir, pwd
+- **mkdir** `folder_name` - create a folder:
+  ```bash
+  rouser@rodos:~$ mkdir folder
+  
+  Folder folder created
+  ```
+  - create a folder entry in the ROOT directory
+  - allocate the required number of clusters
+- **cd** `folder_name` - change the current directory:
+  ```bash
+  rouser@rodos:~$ cd folder
+  
+  Current directory: /folder
+  ```
+  - change the current directory
+- **pwd** - print the current directory:
+  ```bash
+  rouser@rodos:~$ pwd
+  
+  Current directory: /folder
+  ```
+  - print the current directory
+- **rmdir** `folder_name` - delete a folder:
+  ```bash
+    rouser@rodos:~$ rmdir folder
+  
+    Folder folder deleted
+    ```
+    - delete a folder entry in the ROOT directory
+    - deallocate the clusters
+    - delete the files in the folder recursively
+- **help** `command_name` - print the global help menu or the help menu for a specific command
+- **exit** - exit the program
+
 
 ## Requirements:
 - Source code

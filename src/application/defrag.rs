@@ -28,13 +28,17 @@ impl RequestHandler<DefragmentRequest, Void> for DefragmentHandler {
         log::info!("Defragmenting disk...");
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.defragment_disk() {
-                Ok(()) => {
-                    log::info!("Disk has been defragmented successfully");
-                    Ok(())
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
+
+                match disk_manager.defragment_disk() {
+                    Ok(()) => {
+                        log::info!("Disk has been defragmented successfully");
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(_e) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
         }
     }

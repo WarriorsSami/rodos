@@ -1,4 +1,5 @@
 use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::defrag::DefragmentRequest;
@@ -6,7 +7,9 @@ use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::help::HelpRequest;
 use crate::application::ls::ListRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::neofetch::NeofetchRequest;
+use crate::application::pwd::PwdRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
@@ -15,6 +18,7 @@ use crate::core::filter_type::FilterType;
 use crate::core::sort_type::SortType;
 use crate::domain::file_entry::FileEntryAttributes;
 use crate::{info, CONFIG};
+use chrono::Utc;
 use color_print::cprintln;
 use std::error::Error;
 
@@ -117,6 +121,12 @@ impl CliParser {
                 name.to_string(),
                 extension.to_string(),
                 dim,
+                FileEntryAttributes::combine(&[
+                    FileEntryAttributes::File,
+                    FileEntryAttributes::ReadWrite,
+                    FileEntryAttributes::Visible,
+                ]),
+                Utc::now(),
                 content_type,
             ))
         } else {
@@ -186,33 +196,70 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let old_name = captures.name("old_name").unwrap().as_str();
-            let old_extension = captures.name("old_extension").unwrap().as_str();
+            let old_extension = captures.name("old_extension");
             let new_name = captures.name("new_name").unwrap().as_str();
-            let new_extension = captures.name("new_extension").unwrap().as_str();
+            let new_extension = captures.name("new_extension");
 
-            if old_name.len() > 8 {
-                return Err(Box::try_from("Old name must be 8 characters or less!").unwrap());
+            match (old_extension, new_extension) {
+                (Some(old_extension), Some(new_extension)) => {
+                    let old_extension = old_extension.as_str();
+                    let new_extension = new_extension.as_str();
+
+                    if old_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Old name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if old_extension.len() > 3 {
+                        return Err(
+                            Box::try_from("Old extension must be 3 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_name.len() > 8 {
+                        return Err(
+                            Box::try_from("New name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_extension.len() > 3 {
+                        return Err(
+                            Box::try_from("New extension must be 3 characters or less!").unwrap()
+                        );
+                    }
+
+                    log::info!("Rename command parsed successfully: {}", input);
+                    Ok(RenameRequest::new(
+                        old_name.to_string(),
+                        old_extension.to_string(),
+                        new_name.to_string(),
+                        new_extension.to_string(),
+                    ))
+                }
+                (None, None) => {
+                    if old_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Old name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if new_name.len() > 8 {
+                        return Err(
+                            Box::try_from("New name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    log::info!("Rename command parsed successfully: {}", input);
+                    Ok(RenameRequest::new(
+                        old_name.to_string(),
+                        "".to_string(),
+                        new_name.to_string(),
+                        "".to_string(),
+                    ))
+                }
+                _ => Err(Box::try_from("Cannot rename a folder as a file or vice versa!").unwrap()),
             }
-
-            if old_extension.len() > 3 {
-                return Err(Box::try_from("Old extension must be 3 characters or less!").unwrap());
-            }
-
-            if new_name.len() > 8 {
-                return Err(Box::try_from("New name must be 8 characters or less!").unwrap());
-            }
-
-            if new_extension.len() > 3 {
-                return Err(Box::try_from("New extension must be 3 characters or less!").unwrap());
-            }
-
-            log::info!("Rename command parsed successfully: {}", input);
-            Ok(RenameRequest::new(
-                old_name.to_string(),
-                old_extension.to_string(),
-                new_name.to_string(),
-                new_extension.to_string(),
-            ))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid rename command syntax!").unwrap())
@@ -228,7 +275,10 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let name = captures.name("name").unwrap().as_str();
-            let extension = captures.name("extension").unwrap().as_str();
+            let extension = match captures.name("extension") {
+                Some(extension) => extension.as_str(),
+                None => "",
+            };
 
             if name.len() > 8 {
                 return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
@@ -282,39 +332,80 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let src_name = captures.name("src_name").unwrap().as_str();
-            let src_extension = captures.name("src_extension").unwrap().as_str();
-            let dst_name = captures.name("dest_name").unwrap().as_str();
-            let dst_extension = captures.name("dest_extension").unwrap().as_str();
+            let src_extension = captures.name("src_extension");
+            let dest_name = captures.name("dest_name").unwrap().as_str();
+            let dest_extension = captures.name("dest_extension");
 
-            if src_name.len() > 8 {
-                return Err(Box::try_from("Source name must be 8 characters or less!").unwrap());
+            match (src_extension, dest_extension) {
+                (Some(src_extension), Some(dest_extension)) => {
+                    let src_extension = src_extension.as_str();
+                    let dest_extension = dest_extension.as_str();
+
+                    if src_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Source name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if src_extension.len() > 3 {
+                        return Err(Box::try_from(
+                            "Source extension must be 3 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    if dest_name.len() > 8 {
+                        return Err(Box::try_from(
+                            "Destination name must be 8 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    if dest_extension.len() > 3 {
+                        return Err(Box::try_from(
+                            "Destination extension must be 3 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    log::info!("Copy command parsed successfully: {}", input);
+                    Ok(CopyRequest::new(
+                        src_name.to_string(),
+                        src_extension.to_string(),
+                        dest_name.to_string(),
+                        dest_extension.to_string(),
+                    ))
+                }
+                (None, None) => {
+                    if src_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Source name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if dest_name.len() > 8 {
+                        return Err(Box::try_from(
+                            "Destination name must be 8 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    log::info!("Copy command parsed successfully: {}", input);
+                    Ok(CopyRequest::new(
+                        src_name.to_string(),
+                        "".to_string(),
+                        dest_name.to_string(),
+                        "".to_string(),
+                    ))
+                }
+                _ => {
+                    info!("Usage: {}", usage);
+                    Err(
+                        Box::try_from("Cannot copy a file with a directory name or vice versa!")
+                            .unwrap(),
+                    )
+                }
             }
-
-            if src_extension.len() > 3 {
-                return Err(
-                    Box::try_from("Source extension must be 3 characters or less!").unwrap(),
-                );
-            }
-
-            if dst_name.len() > 8 {
-                return Err(
-                    Box::try_from("Destination name must be 8 characters or less!").unwrap(),
-                );
-            }
-
-            if dst_extension.len() > 3 {
-                return Err(
-                    Box::try_from("Destination extension must be 3 characters or less!").unwrap(),
-                );
-            }
-
-            log::info!("Copy command parsed successfully: {}", input);
-            Ok(CopyRequest::new(
-                src_name.to_string(),
-                src_extension.to_string(),
-                dst_name.to_string(),
-                dst_extension.to_string(),
-            ))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid copy command syntax!").unwrap())
@@ -382,9 +473,7 @@ impl CliParser {
                 .collect::<Vec<_>>()
                 .iter()
                 .map(|attr_str| attr_str.parse::<FileEntryAttributes>().unwrap())
-                .collect::<Vec<_>>()
-                .iter()
-                .fold(0, |state, attr| state | *attr as u8);
+                .collect::<Vec<_>>();
 
             Ok(SetAttributesRequest::new(
                 name.to_string(),
@@ -394,6 +483,89 @@ impl CliParser {
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid setattr command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_mkdir(input: &str) -> Result<MakeDirectoryRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("mkdir").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("mkdir").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Mkdir command parsed successfully: {}", input);
+            Ok(MakeDirectoryRequest::new(
+                name.to_string(),
+                FileEntryAttributes::combine(&[
+                    FileEntryAttributes::Directory,
+                    FileEntryAttributes::ReadWrite,
+                    FileEntryAttributes::Visible,
+                ]),
+                Utc::now(),
+            ))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid mkdir command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_cd(input: &str) -> Result<ChangeDirectoryRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("cd").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("cd").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Cd command parsed successfully: {}", input);
+            Ok(ChangeDirectoryRequest::new(name.to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid cd command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_pwd(input: &str) -> Result<PwdRequest, Box<dyn Error>> {
+        let regex = regex::Regex::new(CONFIG.commands.get("pwd").unwrap().regex.as_str()).unwrap();
+        let usage = CONFIG.commands.get("pwd").unwrap().usage.as_str();
+
+        if regex.is_match(input) {
+            log::info!("Pwd command parsed successfully: {}", input);
+            Ok(PwdRequest::new())
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid pwd command syntax!").unwrap())
+        }
+    }
+
+    pub(crate) fn parse_rmdir(input: &str) -> Result<DeleteRequest, Box<dyn Error>> {
+        let regex =
+            regex::Regex::new(CONFIG.commands.get("rmdir").unwrap().regex.as_str()).unwrap();
+        let captures = regex.captures(input);
+        let usage = CONFIG.commands.get("rmdir").unwrap().usage.as_str();
+
+        if let Some(captures) = captures {
+            let name = captures.name("name").unwrap().as_str();
+
+            if name.len() > 8 {
+                return Err(Box::try_from("Name must be 8 characters or less!").unwrap());
+            }
+
+            log::info!("Rmdir command parsed successfully: {}", input);
+            Ok(DeleteRequest::new(name.to_string(), "".to_string()))
+        } else {
+            info!("Usage: {}", usage);
+            Err(Box::try_from("Invalid rmdir command syntax!").unwrap())
         }
     }
 }

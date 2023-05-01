@@ -1,33 +1,75 @@
 use crate::infrastructure::disk_manager::ByteArray;
-use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, LocalResult, TimeZone, Timelike, Utc};
 use std::fmt::Display;
 use std::ops::BitOr;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) enum FileEntryAttributesFlags {
+    Mode = 0x01,
+    Visibility = 0x02,
+    Type = 0x04,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum FileEntryAttributes {
-    Implicit = 0x00,
-    ReadOnly = 0x01,
-    Hidden = 0x02,
-    File = 0x04,
+    /// Read-only file: `set bit`
+    ReadOnly,
+    /// Read-write file: `unset bit`
+    ReadWrite,
+    /// Hidden file: `set bit`
+    Hidden,
+    /// Visible file: `unset bit`
+    Visible,
+    /// File: `set bit`
+    File,
+    /// Directory: `unset bit`
+    Directory,
+}
+
+impl FileEntryAttributes {
+    pub(crate) fn combine(attributes: &[FileEntryAttributes]) -> u8 {
+        attributes.iter().fold(0, |acc, x| {
+            let x: u8 = (*x).into();
+            acc | x
+        })
+    }
+}
+
+impl Into<u8> for FileEntryAttributes {
+    fn into(self) -> u8 {
+        match self {
+            FileEntryAttributes::ReadOnly => 0x01,
+            FileEntryAttributes::ReadWrite => 0x00,
+            FileEntryAttributes::Hidden => 0x02,
+            FileEntryAttributes::Visible => 0x00,
+            FileEntryAttributes::File => 0x04,
+            FileEntryAttributes::Directory => 0x00,
+        }
+    }
 }
 
 impl BitOr for FileEntryAttributes {
     type Output = u8;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        self as u8 | rhs as u8
+        let lhs: u8 = self.into();
+        let rhs: u8 = rhs.into();
+
+        lhs | rhs
     }
 }
 
 impl FromStr for FileEntryAttributes {
-    type Err = ();
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "-w" => Ok(FileEntryAttributes::ReadOnly),
+            "+w" => Ok(FileEntryAttributes::ReadWrite),
+            "-h" => Ok(FileEntryAttributes::Visible),
             "+h" => Ok(FileEntryAttributes::Hidden),
-            _ => Ok(FileEntryAttributes::Implicit),
+            _ => Err(format!("Invalid attribute {}", s)),
         }
     }
 }
@@ -40,6 +82,8 @@ pub(crate) struct FileEntry {
     pub(crate) first_cluster: u16,
     pub(crate) attributes: u8,
     pub(crate) last_modification_datetime: DateTime<Utc>,
+    pub(crate) parent_entry: Option<Box<FileEntry>>,
+    pub(crate) children_entries: Option<Vec<FileEntry>>,
 }
 
 impl FileEntry {
@@ -50,6 +94,8 @@ impl FileEntry {
         first_cluster: u16,
         attributes: u8,
         last_modification_datetime: DateTime<Utc>,
+        parent_entry: Option<Box<FileEntry>>,
+        children_entries: Option<Vec<FileEntry>>,
     ) -> Self {
         Self {
             name,
@@ -58,6 +104,8 @@ impl FileEntry {
             first_cluster,
             attributes,
             last_modification_datetime,
+            parent_entry,
+            children_entries,
         }
     }
 
@@ -67,27 +115,71 @@ impl FileEntry {
             extension: "".to_string(),
             size: 0,
             first_cluster: 0,
-            attributes: 0,
+            attributes: FileEntryAttributes::ReadOnly as u8,
             last_modification_datetime: Utc::now(),
+            parent_entry: None,
+            children_entries: Some(Vec::new()),
+        }
+    }
+
+    pub(crate) fn is_root(&self) -> bool {
+        self.name == "/"
+    }
+
+    pub(crate) fn apply_attributes(&mut self, attributes: &Vec<FileEntryAttributes>) {
+        for attribute in attributes {
+            match attribute {
+                FileEntryAttributes::ReadOnly => {
+                    let mode_bit = self.attributes & FileEntryAttributesFlags::Mode as u8;
+
+                    if mode_bit == 0 {
+                        self.attributes |= FileEntryAttributesFlags::Mode as u8;
+                    }
+                }
+                FileEntryAttributes::ReadWrite => {
+                    let mode_bit = self.attributes & FileEntryAttributesFlags::Mode as u8;
+
+                    if mode_bit != 0 {
+                        self.attributes &= !(FileEntryAttributesFlags::Mode as u8);
+                    }
+                }
+                FileEntryAttributes::Hidden => {
+                    let visibility_bit =
+                        self.attributes & FileEntryAttributesFlags::Visibility as u8;
+
+                    if visibility_bit == 0 {
+                        self.attributes |= FileEntryAttributesFlags::Visibility as u8;
+                    }
+                }
+                FileEntryAttributes::Visible => {
+                    let visibility_bit =
+                        self.attributes & FileEntryAttributesFlags::Visibility as u8;
+
+                    if visibility_bit != 0 {
+                        self.attributes &= !(FileEntryAttributesFlags::Visibility as u8);
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
     pub(crate) fn get_attributes_as_string(&self) -> String {
         let mut result = String::new();
 
-        if self.attributes & FileEntryAttributes::File as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Type as u8 != 0 {
             result.push('f');
         } else {
             result.push('d');
         }
 
-        if self.attributes & FileEntryAttributes::ReadOnly as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Mode as u8 != 0 {
             result.push('r');
         } else {
             result.push('w');
         }
 
-        if self.attributes & FileEntryAttributes::Hidden as u8 != 0 {
+        if self.attributes & FileEntryAttributesFlags::Visibility as u8 != 0 {
             result.push('h');
         } else {
             result.push('v');
@@ -96,7 +188,7 @@ impl FileEntry {
         result
     }
 
-    fn convert_u16_tuple_to_date_time(value: (u16, u16)) -> DateTime<Utc> {
+    fn convert_u16_tuple_to_date_time(value: (u16, u16)) -> LocalResult<DateTime<Utc>> {
         let year = (value.0 >> 9) + 1980;
         let month = (value.0 >> 5) & 0x0F;
         let day = value.0 & 0x1F;
@@ -112,33 +204,42 @@ impl FileEntry {
             minute as u32,
             second as u32,
         )
-        .unwrap()
     }
 
     pub(crate) fn is_file(&self) -> bool {
-        self.attributes & FileEntryAttributes::File as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Type as u8 != 0
     }
 
     pub(crate) fn is_hidden(&self) -> bool {
-        self.attributes & FileEntryAttributes::Hidden as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Visibility as u8 != 0
     }
 
     pub(crate) fn is_read_only(&self) -> bool {
-        self.attributes & FileEntryAttributes::ReadOnly as u8 != 0
+        self.attributes & FileEntryAttributesFlags::Mode as u8 != 0
     }
 }
 
 impl Display for FileEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} - {}.{} {} ({} B)",
-            self.get_attributes_as_string(),
-            self.name,
-            self.extension,
-            self.last_modification_datetime,
-            self.size
-        )
+        match self.is_file() {
+            true => write!(
+                f,
+                "{} - {}.{} {} ({} B)",
+                self.get_attributes_as_string(),
+                self.name,
+                self.extension,
+                self.last_modification_datetime,
+                self.size
+            ),
+            false => write!(
+                f,
+                "{} - {} {} ({} B)",
+                self.get_attributes_as_string(),
+                self.name,
+                self.last_modification_datetime,
+                self.size
+            ),
+        }
     }
 }
 
@@ -165,7 +266,13 @@ impl From<ByteArray> for FileEntry {
         let time = u16::from_be_bytes([value[18], value[19]]);
         let date = u16::from_be_bytes([value[20], value[21]]);
 
-        let updated_datetime = FileEntry::convert_u16_tuple_to_date_time((date, time));
+        let last_modification_datetime =
+            match FileEntry::convert_u16_tuple_to_date_time((date, time)) {
+                LocalResult::Single(value) => value,
+                _ => {
+                    panic!("Invalid date and time: {:?}", value);
+                }
+            };
 
         Self {
             name,
@@ -173,7 +280,9 @@ impl From<ByteArray> for FileEntry {
             size,
             first_cluster,
             attributes,
-            last_modification_datetime: updated_datetime,
+            last_modification_datetime,
+            parent_entry: None,
+            children_entries: None,
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::application::cat::CatHandler;
+use crate::application::cd::ChangeDirectoryHandler;
 use crate::application::cp::CopyHandler;
 use crate::application::create::CreateHandler;
 use crate::application::defrag::DefragmentHandler;
@@ -6,7 +7,9 @@ use crate::application::del::DeleteHandler;
 use crate::application::fmt::FormatHandler;
 use crate::application::help::HelpHandler;
 use crate::application::ls::ListHandler;
+use crate::application::mkdir::MakeDirectoryHandler;
 use crate::application::neofetch::NeofetchHandler;
+use crate::application::pwd::PwdHandler;
 use crate::application::rename::RenameHandler;
 use crate::application::setattr::SetAttributesHandler;
 use crate::core::cli_parser::CliParser;
@@ -26,6 +29,9 @@ use std::sync::{Arc, Mutex};
 
 mod application;
 mod core;
+mod domain;
+mod infrastructure;
+
 // config
 lazy_static! {
     pub(crate) static ref CONFIG: Config = {
@@ -35,7 +41,7 @@ lazy_static! {
             Ok(config_str) => toml::from_str(&config_str).expect("Unable to parse config string"),
             Err(..) => Config::default(),
         };
-        
+
         // create disk folder if it doesn't exist
         if !std::path::Path::new(&config.disk_dir_path).exists() {
             std::fs::create_dir(&config.disk_dir_path).expect("Unable to create disk folder");
@@ -75,7 +81,7 @@ lazy_static! {
                 // create new disk manager according to the boot sector from the storage file
                 // this is necessary in order to tackle the inconsistencies between the in-memory
                 // data structures used to represent the disk when switching between FAT16 and FAT32 and vice-versa
-                disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector());
+                disk_manager = DiskManager::new(CONFIG_ARC.clone(), disk_manager.get_boot_sector().clone());
 
                 disk_manager.pull_sync(); // grab the rest of the data from the storage file
             }
@@ -95,11 +101,11 @@ lazy_static! {
         .add_handler(FormatHandler::new(DISK_ARC.clone()))
         .add_handler(DefragmentHandler::new(DISK_ARC.clone()))
         .add_handler(SetAttributesHandler::new(DISK_ARC.clone()))
+        .add_handler(MakeDirectoryHandler::new(DISK_ARC.clone()))
+        .add_handler(ChangeDirectoryHandler::new(DISK_ARC.clone()))
+        .add_handler(PwdHandler::new(DISK_ARC.clone()))
         .build();
 }
-mod domain;
-
-mod infrastructure;
 
 fn main() {
     init_logger();
@@ -111,7 +117,9 @@ fn main() {
 
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
-            Ok(..) => {}
+            Ok(read_bytes) => {
+                log::info!("Read {} bytes from stdin", read_bytes);
+            }
             Err(err) => {
                 warn!("Unable to read input, please try again!");
 
@@ -173,6 +181,20 @@ fn main() {
                 parse_defrag,
                 input.as_str(),
                 "Disk defragmented successfully"
+            ),
+            "mkdir" => handle!(
+                mediator,
+                parse_mkdir,
+                input.as_str(),
+                "Directory created successfully!"
+            ),
+            "cd" => handle!(mediator, parse_cd, input.as_str()),
+            "pwd" => handle!(mediator, parse_pwd, input.as_str()),
+            "rmdir" => handle!(
+                mediator,
+                parse_rmdir,
+                input.as_str(),
+                "Directory deleted successfully!"
             ),
             "help" => handle!(mediator, parse_help, input.as_str()),
             "exit" => handle!(

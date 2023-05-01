@@ -1,9 +1,11 @@
 use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::cp::CopyRequest;
 use crate::application::create::CreateRequest;
 use crate::application::del::DeleteRequest;
 use crate::application::fmt::FormatRequest;
 use crate::application::ls::ListRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::rename::RenameRequest;
 use crate::application::setattr::SetAttributesRequest;
 use crate::application::Void;
@@ -94,11 +96,25 @@ pub(crate) trait IDiskManager: Sync + Send {
     /// * `Box<dyn Error>` - If the disk is not able to be defragmented.
     fn defragment_disk(&mut self) -> Void;
 
-    /// Returns the working directory
-    fn get_working_directory(&self) -> String;
+    /// Creates a new directory in the working directory.
+    /// ## Arguments
+    /// * `request` - The request containing the directory name.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the directory name already exists or there is not enough space in the disk.
+    fn make_directory(&mut self, request: &MakeDirectoryRequest) -> Void;
+
+    /// Changes the working directory
+    /// ## Arguments
+    /// * `request` - The request containing the directory name.
+    /// ## Errors
+    /// * `Box<dyn Error>` - If the directory does not exist.
+    fn change_working_directory(&mut self, request: &ChangeDirectoryRequest) -> Void;
+
+    /// Returns the whole path to the working directory
+    fn get_working_directory_full_path(&self) -> String;
 
     /// Get boot sector
-    fn get_boot_sector(&self) -> BootSector;
+    fn get_boot_sector(&self) -> &BootSector;
 
     /// Returns the free space in the disk with respect to the total number of empty clusters
     fn get_free_space(&mut self) -> u64;

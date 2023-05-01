@@ -1,16 +1,21 @@
 use crate::application::Void;
 use crate::core::Arm;
+use crate::domain::file_entry::FileEntryAttributes;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
 pub(crate) struct SetAttributesRequest {
     pub(crate) name: String,
     pub(crate) extension: String,
-    pub(crate) attributes: u8,
+    pub(crate) attributes: Vec<FileEntryAttributes>,
 }
 
 impl SetAttributesRequest {
-    pub(crate) fn new(name: String, extension: String, attributes: u8) -> Self {
+    pub(crate) fn new(
+        name: String,
+        extension: String,
+        attributes: Vec<FileEntryAttributes>,
+    ) -> Self {
         Self {
             name,
             extension,
@@ -34,20 +39,24 @@ impl SetAttributesHandler {
 impl RequestHandler<SetAttributesRequest, Void> for SetAttributesHandler {
     fn handle(&mut self, request: SetAttributesRequest) -> Void {
         log::info!(
-            "Setting attributes {} for file {}",
+            "Setting attributes {:?} for file {}",
             request.attributes,
             request.name
         );
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.set_attributes(&request) {
-                Ok(_) => {
-                    log::info!("Attributes set successfully");
-                    disk_manager.push_sync();
-                    Ok(())
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
+
+                match disk_manager.set_attributes(&request) {
+                    Ok(_) => {
+                        log::info!("Attributes set successfully");
+                        disk_manager.push_sync();
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(_) => Err(Box::try_from("Unable to lock disk manager").unwrap()),
         }
     }

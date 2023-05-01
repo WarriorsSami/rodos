@@ -1,24 +1,17 @@
 use crate::application::cat::CatRequest;
-use crate::application::cp::CopyRequest;
+use crate::application::cd::ChangeDirectoryRequest;
 use crate::application::create::CreateRequest;
-use crate::application::del::DeleteRequest;
-use crate::application::fmt::FormatRequest;
-use crate::application::ls::ListRequest;
-use crate::application::rename::RenameRequest;
-use crate::application::setattr::SetAttributesRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::Void;
 use crate::core::config::Config;
-use crate::core::content_type::{ContentGenerator, ContentType};
-use crate::core::filter_type::FilterType;
-use crate::core::sort_type::SortType;
+use crate::core::content_type::ContentType;
 use crate::core::Arm;
 use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
-use crate::domain::file_entry::{FileEntry, FileEntryAttributes, RootTable};
+use crate::domain::file_entry::{FileEntry, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
-use crate::{CONFIG, CONFIG_ARC};
+use crate::CONFIG;
 use chrono::Utc;
-use std::error::Error;
 use std::io::{Read, Write};
 
 pub(crate) type ByteArray = Vec<u8>;
@@ -64,12 +57,12 @@ pub(crate) type StorageBuffer = Vec<ByteArray>;
 /// The root table is initialized with the content of the FAT table.
 #[derive(Debug, Clone)]
 pub(crate) struct DiskManager {
-    fat: FatTable,
-    root: RootTable,
-    working_directory: FileEntry,
-    boot_sector: BootSector,
-    storage_buffer: StorageBuffer,
-    storage_file_path: String,
+    pub(in crate::infrastructure) fat: FatTable,
+    pub(in crate::infrastructure) root: RootTable,
+    pub(in crate::infrastructure) working_directory: FileEntry,
+    pub(in crate::infrastructure) boot_sector: BootSector,
+    pub(in crate::infrastructure) storage_buffer: StorageBuffer,
+    pub(in crate::infrastructure) storage_file_path: String,
 }
 
 impl DiskManager {
@@ -108,7 +101,7 @@ impl DiskManager {
         }
     }
 
-    fn sync_to_buffer(&mut self) {
+    pub(in crate::infrastructure) fn sync_to_buffer(&mut self) {
         // sync boot sector to storage buffer
         let boot_sector_clusters = self.boot_sector.clusters_per_boot_sector as usize;
         let mut boot_sector_data: ByteArray = self.boot_sector.clone().into();
@@ -186,7 +179,7 @@ impl DiskManager {
             });
     }
 
-    fn sync_to_file(&mut self) {
+    pub(in crate::infrastructure) fn sync_to_file(&mut self) {
         self.sync_to_buffer();
 
         let mut storage_file =
@@ -204,7 +197,7 @@ impl DiskManager {
         log::debug!("Root: {:?}", self.root);
     }
 
-    fn sync_from_file(&mut self) {
+    pub(in crate::infrastructure) fn sync_from_file(&mut self) {
         let mut storage_file =
             std::fs::File::open(&self.storage_file_path).expect("Unable to open storage file");
         self.storage_buffer.iter_mut().for_each(|cluster| {
@@ -214,7 +207,7 @@ impl DiskManager {
         });
     }
 
-    fn sync_from_buffer(&mut self, only_boot_sector: bool) {
+    pub(in crate::infrastructure) fn sync_from_buffer(&mut self, only_boot_sector: bool) {
         self.sync_from_file();
 
         // sync boot sector from storage buffer
@@ -263,32 +256,202 @@ impl DiskManager {
         let clusters_per_root_entry =
             self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size;
 
-        self.storage_buffer
+        let root_table: RootTable = self
+            .storage_buffer
             .iter()
             .skip(boot_sector_clusters + fat_clusters)
+            .cloned()
             .collect::<Vec<_>>()
             .chunks(clusters_per_root_entry as usize)
-            .zip(self.root.iter_mut())
-            .for_each(|(cluster, file_entry)| {
-                let cluster_is_empty = cluster[0].iter().all(|byte| *byte == 0);
+            .take(self.root.len())
+            .map(|cluster| {
+                let cluster_is_empty = cluster[0]
+                    .iter()
+                    .take((self.boot_sector.root_entry_cell_size / 2) as usize)
+                    .all(|byte| *byte == 0);
 
-                *file_entry = match cluster_is_empty {
+                match cluster_is_empty {
                     false => {
                         let mut file_entry_data: ByteArray = Vec::new();
 
-                        file_entry_data.extend_from_slice(cluster[0]);
+                        file_entry_data.extend_from_slice(&cluster[0]);
                         if cluster.len() > 1 {
-                            file_entry_data.extend_from_slice(cluster[1]);
+                            file_entry_data.extend_from_slice(&cluster[1]);
                         }
 
-                        FileEntry::from(file_entry_data)
+                        let mut file_entry_result = FileEntry::from(file_entry_data);
+                        file_entry_result.parent_entry = Some(Box::new(FileEntry::root()));
+
+                        if file_entry_result.is_file() {
+                            file_entry_result
+                        } else {
+                            self.link_root_table_to_directory(&mut file_entry_result);
+                            file_entry_result
+                        }
                     }
                     true => FileEntry::default(),
-                };
-            });
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.root = root_table;
+        self.sync_to_file();
+
+        if self.working_directory.is_root() {
+            self.working_directory.parent_entry = None;
+            self.working_directory.children_entries = Some(self.root.clone());
+        } else {
+            self.sync_working_directory_from_root();
+        }
     }
 
-    fn free_clusters_and_entry(&mut self, file_entry: &FileEntry) {
+    pub(in crate::infrastructure) fn link_root_table_to_directory(
+        &mut self,
+        directory_entry: &mut FileEntry,
+    ) {
+        let mut root_table = RootTable::default();
+
+        let mut current_cluster_index = directory_entry.first_cluster;
+        while FatValue::from(current_cluster_index) != FatValue::EndOfChain {
+            let mut file_entry_data: ByteArray = self
+                .storage_buffer
+                .get(current_cluster_index as usize)
+                .unwrap()
+                .to_vec();
+
+            // check if the file entry is split across multiple clusters
+            if self.boot_sector.root_entry_cell_size / self.boot_sector.cluster_size != 1 {
+                current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
+                let file_entry_data_next_cluster: ByteArray = self
+                    .storage_buffer
+                    .get(current_cluster_index as usize)
+                    .unwrap()
+                    .to_vec();
+                file_entry_data.extend_from_slice(&file_entry_data_next_cluster);
+            }
+
+            let mut file_entry_result = FileEntry::from(file_entry_data);
+            file_entry_result.parent_entry = Some(Box::new(directory_entry.clone()));
+
+            if file_entry_result.is_file()
+                || (!file_entry_result.is_file()
+                    && (file_entry_result.name == "." || file_entry_result.name == ".."))
+            {
+                root_table.push(file_entry_result);
+            } else {
+                self.link_root_table_to_directory(&mut file_entry_result);
+                root_table.push(file_entry_result);
+            }
+
+            current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
+        }
+
+        let cnt_dirs = root_table.iter().filter(|entry| !entry.is_file()).count() as u16;
+        let size_of_files = root_table
+            .iter()
+            .filter(|entry| entry.is_file())
+            .map(|entry| entry.size)
+            .sum::<u32>();
+
+        directory_entry.size =
+            size_of_files + (self.boot_sector.root_entry_cell_size * cnt_dirs) as u32;
+        directory_entry.children_entries = Some(root_table.clone());
+        self.sync_directory_root_table_to_storage(directory_entry);
+    }
+
+    fn sync_working_directory_from_root(&mut self) {
+        let path = Self::get_path_from_root_to_entry(&self.working_directory);
+
+        let mut current_entry = self
+            .root
+            .iter()
+            .find(|entry| entry.name == path[1])
+            .unwrap();
+        for path_part in path.iter().skip(2) {
+            let children_entries = current_entry.children_entries.as_ref().unwrap();
+            current_entry = children_entries
+                .iter()
+                .find(|&entry| entry.name == path_part.as_str())
+                .unwrap();
+        }
+
+        self.working_directory = current_entry.clone();
+    }
+
+    fn get_path_from_root_to_entry(entry: &FileEntry) -> Vec<String> {
+        let mut path: Vec<String> = Vec::new();
+        let mut current_entry = entry.clone();
+        path.push(current_entry.name.clone());
+
+        while let Some(parent_entry) = &current_entry.parent_entry {
+            let parent_entry = parent_entry.as_ref();
+            path.push(parent_entry.name.clone());
+            current_entry = parent_entry.clone();
+        }
+
+        path.reverse();
+        path
+    }
+
+    pub(in crate::infrastructure) fn serialize_directory_root_table(
+        directory: &FileEntry,
+    ) -> Vec<u8> {
+        directory
+            .children_entries
+            .as_ref()
+            .unwrap()
+            .iter()
+            .cloned()
+            .flat_map(|file_entry| {
+                let file_byte_array: ByteArray = file_entry.into();
+                file_byte_array
+            })
+            .collect::<Vec<u8>>()
+    }
+
+    pub(in crate::infrastructure) fn sync_directory_root_table_to_storage(
+        &mut self,
+        dir_entry: &FileEntry,
+    ) {
+        // free old working directory data
+        self.free_clusters(dir_entry);
+
+        // get updated working directory data
+        let mut directory_data = Self::serialize_directory_root_table(dir_entry);
+
+        // update fat and storage buffer
+        let mut current_cluster_index = dir_entry.first_cluster;
+
+        while !directory_data.is_empty() {
+            let mut cluster_data: ByteArray = Vec::new();
+            cluster_data
+                .extend_from_slice(&directory_data[..self.boot_sector.cluster_size as usize]);
+            directory_data.drain(..self.boot_sector.cluster_size as usize);
+            self.storage_buffer[current_cluster_index as usize] = cluster_data.clone();
+
+            let next_cluster_index = self
+                .get_next_free_cluster_index_gt(current_cluster_index as usize)
+                .unwrap();
+            self.fat[current_cluster_index as usize] = match directory_data.is_empty() {
+                false => FatValue::from(next_cluster_index as u16),
+                true => FatValue::EndOfChain,
+            };
+
+            current_cluster_index = next_cluster_index as u16;
+        }
+    }
+
+    pub(in crate::infrastructure) fn get_next_free_cluster_index_gt(
+        &self,
+        current_cluster_index: usize,
+    ) -> Option<usize> {
+        self.fat.iter().enumerate().position(|(index, fat_value)| {
+            *fat_value == FatValue::Free && index > current_cluster_index
+        })
+    }
+
+    pub(in crate::infrastructure) fn free_clusters(&mut self, file_entry: &FileEntry) {
+        // delete file entry associated data
         let mut cluster_index = file_entry.first_cluster as usize;
         while self.fat[cluster_index] != FatValue::EndOfChain {
             let next_cluster_index: u16 = self.fat[cluster_index].clone().into();
@@ -296,558 +459,271 @@ impl DiskManager {
             cluster_index = next_cluster_index as usize;
         }
         self.fat[cluster_index] = FatValue::Free;
-
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|entry| {
-                entry.name == file_entry.name && entry.extension == file_entry.extension
-            })
-            .unwrap();
-        self.root[file_entry_index] = FileEntry::default();
     }
 
-    fn write_to_temp(file_content: &str) -> Void {
+    pub(in crate::infrastructure) fn free_file_entry(&mut self, file_entry: &FileEntry) {
+        // delete the actual file entry
+        match self.working_directory.is_root() {
+            true => {
+                let file_entry_index = self.root.iter().position(|entry| {
+                    entry.name == file_entry.name && entry.extension == file_entry.extension
+                });
+                if let Some(file_entry_index) = file_entry_index {
+                    self.root[file_entry_index] = FileEntry::default();
+                }
+            }
+            false => {
+                self.get_root_table_for_working_directory().retain(|entry| {
+                    !(entry.name == file_entry.name && entry.extension == file_entry.extension)
+                });
+            }
+        }
+    }
+
+    pub(in crate::infrastructure) fn change_working_directory_to_root(&mut self) -> Void {
+        while !self.working_directory.is_root() {
+            let cd_request = ChangeDirectoryRequest::new("..".to_string());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
+        }
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn change_working_directory_to(
+        &mut self,
+        dir_entry: &FileEntry,
+    ) -> Void {
+        self.change_working_directory_to_root()?;
+
+        let path = Self::get_path_from_root_to_entry(dir_entry);
+
+        for path_part in path.iter().skip(1) {
+            let cd_request = ChangeDirectoryRequest::new(path_part.clone());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
+        }
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn inflate_directory_tree_inline(
+        &mut self,
+        src_dir_entry: &FileEntry,
+        dest_dir_name: String,
+    ) -> Void {
+        // change working directory to dir_entry
+        let cd_request = ChangeDirectoryRequest::new(dest_dir_name);
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        // iterate over all children entries
+        let root_table = src_dir_entry.children_entries.as_ref();
+
+        if let Some(root_table) = root_table {
+            for entry in root_table.iter() {
+                if entry.name == "." || entry.name == ".." {
+                    continue;
+                }
+
+                match entry.is_file() {
+                    true => {
+                        // save the current working directory
+                        let current_working_directory = self.working_directory.clone();
+
+                        // change working directory to src directory
+                        self.change_working_directory_to(src_dir_entry)?;
+
+                        // get file content
+                        let cat_request =
+                            CatRequest::new(entry.name.clone(), entry.extension.clone());
+                        let file_content = self.get_file_content(&cat_request)?;
+
+                        // change working directory back to dest directory
+                        self.change_working_directory_to(&current_working_directory)?;
+
+                        // write the file content to the temp buffer file
+                        DiskManager::write_to_temp_buffer(file_content.as_str())?;
+
+                        // create the file entry
+                        let create_request = CreateRequest::new(
+                            entry.name.clone(),
+                            entry.extension.clone(),
+                            file_content.len() as u32,
+                            entry.attributes,
+                            Utc::now(),
+                            ContentType::Temp,
+                        );
+                        self.create_file(&create_request)?;
+                        self.push_sync();
+                    }
+                    false => {
+                        // create the directory entry
+                        let make_directory_request = MakeDirectoryRequest::new(
+                            entry.name.clone(),
+                            entry.attributes,
+                            Utc::now(),
+                        );
+                        self.pull_sync();
+                        self.make_directory(&make_directory_request)?;
+                        self.push_sync();
+
+                        // iterate over the directory's root table and recreate the dir tree in the new disk representation
+                        self.inflate_directory_tree_inline(entry, entry.name.clone())?;
+                    }
+                }
+            }
+        }
+
+        // change working directory back to parent
+        let cd_request = ChangeDirectoryRequest::new("..".to_string());
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn inflate_directory_tree(
+        &mut self,
+        disk_manager: &mut DiskManager,
+        dir_entry: &FileEntry,
+    ) -> Void {
+        // change working directory to dir_entry
+        let cd_request = ChangeDirectoryRequest::new(dir_entry.name.clone());
+        disk_manager.change_working_directory(&cd_request)?;
+
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        // iterate over all children entries
+        let root_table = dir_entry.children_entries.as_ref();
+
+        if let Some(root_table) = root_table {
+            for entry in root_table.iter() {
+                if entry.name == "." || entry.name == ".." {
+                    continue;
+                }
+
+                match entry.is_file() {
+                    true => {
+                        // get file content
+                        self.pull_sync();
+                        let cat_request =
+                            CatRequest::new(entry.name.clone(), entry.extension.clone());
+                        let file_content = self.get_file_content(&cat_request)?;
+
+                        // write the file content to the temp buffer file
+                        DiskManager::write_to_temp_buffer(file_content.as_str())?;
+
+                        // create the file entry
+                        let create_request = CreateRequest::new(
+                            entry.name.clone(),
+                            entry.extension.clone(),
+                            file_content.len() as u32,
+                            entry.attributes,
+                            entry.last_modification_datetime,
+                            ContentType::Temp,
+                        );
+                        disk_manager.create_file(&create_request)?;
+                    }
+                    false => {
+                        // create the directory entry
+                        let make_directory_request = MakeDirectoryRequest::new(
+                            entry.name.clone(),
+                            entry.attributes,
+                            entry.last_modification_datetime,
+                        );
+                        disk_manager.make_directory(&make_directory_request)?;
+
+                        // iterate over the directory's root table and recreate the dir tree in the new disk representation
+                        self.inflate_directory_tree(disk_manager, entry)?;
+                    }
+                }
+            }
+        }
+
+        // change working directory back to parent
+        let cd_request = ChangeDirectoryRequest::new("..".to_string());
+        disk_manager.change_working_directory(&cd_request)?;
+
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn write_to_temp_buffer(file_content: &str) -> Void {
         let mut temp_file = std::fs::File::create(CONFIG.temp_file_path.clone())?;
         temp_file.write_all(file_content.as_bytes())?;
 
         Ok(())
     }
-}
 
-impl IDiskManager for DiskManager {
-    fn push_sync(&mut self) {
-        self.sync_to_file();
+    pub(in crate::infrastructure) fn get_root_table_for_working_directory(
+        &mut self,
+    ) -> &mut RootTable {
+        match self.working_directory.is_root() {
+            true => &mut self.root,
+            false => self.working_directory.children_entries.as_mut().unwrap(),
+        }
     }
 
-    fn pull_sync(&mut self) {
-        self.sync_from_buffer(false);
-    }
+    pub(in crate::infrastructure) fn append_to_root_table_of_working_dir(
+        &mut self,
+        file_entry: FileEntry,
+    ) -> Void {
+        match self.working_directory.is_root() {
+            true => {
+                let dir_file_entry_index = self
+                    .root
+                    .iter()
+                    .position(|file_entry| file_entry.name.is_empty());
 
-    fn pull_boot_sector_sync(&mut self) {
-        self.sync_from_buffer(true);
-    }
-
-    fn create_file(&mut self, request: &CreateRequest) -> Void {
-        // check if file already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} already exists",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
-        }
-
-        // check if there is enough space in root
-        if self
-            .root
-            .iter()
-            .all(|file_entry| !file_entry.name.is_empty())
-        {
-            return Err(Box::try_from("No space in root".to_string()).unwrap());
-        }
-
-        // check if there is enough space in fat
-        let required_clusters =
-            (request.file_size as f64 / self.boot_sector.cluster_size as f64).ceil() as usize;
-        if self
-            .fat
-            .iter()
-            .filter(|&fat_value| *fat_value == FatValue::Free)
-            .count()
-            < required_clusters
-        {
-            return Err(Box::try_from("No space in fat".to_string()).unwrap());
-        }
-
-        // find a free cluster in fat
-        let first_cluster = self
-            .fat
-            .iter()
-            .position(|fat_value| *fat_value == FatValue::Free)
-            .unwrap();
-
-        // create file entry in root
-        let file_entry = FileEntry::new(
-            request.file_name.to_owned(),
-            request.file_extension.to_owned(),
-            request.file_size.to_owned(),
-            first_cluster as u16,
-            FileEntryAttributes::File as u8,
-            Utc::now(),
-        );
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| file_entry.name.is_empty())
-            .unwrap();
-
-        self.root[file_entry_index] = file_entry.clone();
-
-        // create the cluster chain in fat and write the file data to the storage buffer
-        let mut current_cluster = first_cluster;
-        let mut remaining_file_size = request.file_size as u16;
-        let mut file_data = ContentGenerator::generate(request.content_type, request.file_size);
-
-        while remaining_file_size > 0 {
-            match self
-                .fat
-                .iter()
-                .enumerate()
-                .position(|(cluster_index, fat_value)| {
-                    *fat_value == FatValue::Free && cluster_index > current_cluster
-                }) {
-                Some(next_cluster) => {
-                    self.fat[current_cluster] = FatValue::Data(next_cluster as u16);
-
-                    self.storage_buffer[current_cluster] = file_data
-                        .drain(
-                            ..std::cmp::min(
-                                self.boot_sector.cluster_size as usize,
-                                remaining_file_size as usize,
-                            ),
-                        )
-                        .collect();
-
-                    if remaining_file_size > self.boot_sector.cluster_size {
-                        remaining_file_size -= self.boot_sector.cluster_size;
-                        current_cluster = next_cluster;
-                    } else {
-                        // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster]
-                            .resize(self.boot_sector.cluster_size as usize, 0);
-                        self.fat[current_cluster] = FatValue::EndOfChain;
-                        remaining_file_size = 0;
-                    }
-                }
-                None => {
-                    // mark the current cluster as end of chain and free the chain cluster and the file entry
-                    self.fat[current_cluster] = FatValue::EndOfChain;
-                    self.free_clusters_and_entry(&file_entry);
-                    return Err(Box::try_from("No space in fat".to_string()).unwrap());
+                if let Some(dir_file_entry_index) = dir_file_entry_index {
+                    self.root[dir_file_entry_index] = file_entry;
+                    Ok(())
+                } else {
+                    Err(Box::try_from("No space left in the root folder").unwrap())
                 }
             }
-        }
+            false => {
+                // add to root table
+                self.working_directory
+                    .children_entries
+                    .as_mut()
+                    .unwrap()
+                    .push(file_entry.clone());
 
-        Ok(())
-    }
+                // add to storage buffer
+                let mut current_cluster_index = self.working_directory.first_cluster;
+                while self.fat[current_cluster_index as usize] != FatValue::EndOfChain {
+                    current_cluster_index = self.fat[current_cluster_index as usize].clone().into();
+                }
 
-    fn list_files(&mut self, request: &ListRequest) -> Result<RootTable, Box<dyn Error>> {
-        // filter away empty entries
-        let mut file_entries: RootTable = self
-            .root
-            .iter()
-            .filter(|&file_entry| !file_entry.name.is_empty())
-            .cloned()
-            .collect();
+                let mut file_entry_data: ByteArray = file_entry.into();
+                let mut next_cluster_index = self.get_next_free_cluster_index_gt(0).unwrap();
+                self.fat[current_cluster_index as usize] =
+                    FatValue::from(next_cluster_index as u16);
 
-        // apply filters if any
-        if !request.filters.is_empty() {
-            file_entries.retain(|file_entry| {
-                request.filters.iter().all(|filter| match filter {
-                    FilterType::Name(name) => file_entry.name == *name,
-                    FilterType::Extension(extension) => file_entry.extension == *extension,
-                    FilterType::Files => file_entry.is_file(),
-                    FilterType::Directories => !file_entry.is_file(),
-                    FilterType::All => !file_entry.is_hidden(),
-                    _ => true,
-                })
-            });
-        } else {
-            // as default, filter away hidden files
-            file_entries.retain(|file_entry| !file_entry.is_hidden());
-        }
+                while !file_entry_data.is_empty() {
+                    let mut cluster_data: ByteArray = Vec::new();
+                    cluster_data.extend_from_slice(
+                        &file_entry_data[..self.boot_sector.cluster_size as usize],
+                    );
+                    file_entry_data.drain(..self.boot_sector.cluster_size as usize);
+                    self.storage_buffer[next_cluster_index] = cluster_data.clone();
 
-        // apply sort if any
-        if let Some(sort) = &request.sort {
-            match &sort {
-                SortType::NameAsc => {
-                    file_entries.sort_by(|a, b| a.name.cmp(&b.name));
+                    current_cluster_index = next_cluster_index as u16;
+                    next_cluster_index = self
+                        .get_next_free_cluster_index_gt(current_cluster_index as usize)
+                        .unwrap();
+                    self.fat[current_cluster_index as usize] =
+                        FatValue::from(next_cluster_index as u16);
                 }
-                SortType::NameDesc => {
-                    file_entries.sort_by(|a, b| b.name.cmp(&a.name));
-                }
-                SortType::DateAsc => {
-                    file_entries.sort_by(|a, b| {
-                        a.last_modification_datetime
-                            .cmp(&b.last_modification_datetime)
-                    });
-                }
-                SortType::DateDesc => {
-                    file_entries.sort_by(|a, b| {
-                        b.last_modification_datetime
-                            .cmp(&a.last_modification_datetime)
-                    });
-                }
-                SortType::SizeAsc => {
-                    file_entries.sort_by(|a, b| a.size.cmp(&b.size));
-                }
-                SortType::SizeDesc => {
-                    file_entries.sort_by(|a, b| b.size.cmp(&a.size));
-                }
+                self.fat[current_cluster_index as usize] = FatValue::EndOfChain;
+
+                Ok(())
             }
         }
-
-        Ok(file_entries)
-    }
-
-    fn rename_file(&mut self, request: &RenameRequest) -> Void {
-        // check if the old file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.old_name && file_entry.extension == request.old_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.old_name, request.old_extension
-            ))
-            .unwrap());
-        }
-
-        // check if a file with the new name already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.new_name && file_entry.extension == request.new_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} already exists",
-                request.new_name, request.new_extension
-            ))
-            .unwrap());
-        }
-
-        // get the index of the file entry in root
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.old_name && file_entry.extension == request.old_extension
-            })
-            .unwrap();
-
-        // check if the file is read only
-        if self.root[file_entry_index].is_read_only() {
-            return Err(Box::try_from(format!(
-                "File {}.{} is read only",
-                request.old_name, request.old_extension
-            ))
-            .unwrap());
-        }
-
-        // rename the file in root
-        self.root[file_entry_index].name = request.new_name.to_owned();
-        self.root[file_entry_index].extension = request.new_extension.to_owned();
-
-        Ok(())
-    }
-
-    fn delete_file(&mut self, request: &DeleteRequest) -> Void {
-        // check if the file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
-        }
-
-        // get the file entry index in root
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.file_name
-                    && file_entry.extension == request.file_extension
-            })
-            .unwrap_or_default();
-
-        // check if it is read only
-        if self.root[file_entry_index].is_read_only() {
-            return Err(Box::try_from(format!(
-                "File {}.{} is read only",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
-        }
-
-        // delete the file in root and free the cluster chain in fat
-        let file_entry = self.root[file_entry_index].clone();
-        self.free_clusters_and_entry(&file_entry);
-
-        Ok(())
-    }
-
-    fn get_file_content(&mut self, request: &CatRequest) -> Result<String, Box<dyn Error>> {
-        // check if the file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.file_name && file_entry.extension == request.file_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.file_name, request.file_extension
-            ))
-            .unwrap());
-        }
-
-        // get the file entry
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.file_name
-                    && file_entry.extension == request.file_extension
-            })
-            .unwrap_or_default();
-
-        // iterate through the cluster chain and read the file content from the storage buffer
-        let mut content = String::new();
-        let mut current_cluster = self.root[file_entry_index].first_cluster as usize;
-
-        while self.fat[current_cluster] != FatValue::EndOfChain {
-            content.push_str(&String::from_utf8_lossy(
-                &self.storage_buffer[current_cluster][..self.boot_sector.cluster_size as usize],
-            ));
-
-            let next_cluster_index: u16 = self.fat[current_cluster].clone().into();
-            current_cluster = next_cluster_index as usize;
-        }
-
-        // push the remaining content
-        let remaining_content_size =
-            self.root[file_entry_index].size as usize % self.boot_sector.cluster_size as usize;
-        content.push_str(&String::from_utf8_lossy(
-            &self.storage_buffer[current_cluster][..remaining_content_size],
-        ));
-
-        Ok(content)
-    }
-
-    fn copy_file(&mut self, request: &CopyRequest) -> Void {
-        // check if the src file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.src_name && file_entry.extension == request.src_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.src_name, request.src_extension
-            ))
-            .unwrap());
-        }
-
-        // check if the dest file already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.dest_name && file_entry.extension == request.dest_extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} already exists",
-                request.dest_name, request.dest_extension
-            ))
-            .unwrap());
-        }
-
-        // check if there are empty entries in root
-        if !self
-            .root
-            .iter()
-            .any(|file_entry| file_entry.name.is_empty())
-        {
-            return Err(Box::try_from("No empty entries in root").unwrap());
-        }
-
-        // get the src file entry
-        let src_file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.src_name && file_entry.extension == request.src_extension
-            })
-            .unwrap_or_default();
-
-        // check if there is enough space in fat
-        let src_file_entry = self.root[src_file_entry_index].clone();
-        let src_file_size = src_file_entry.size as usize;
-        let required_clusters = (src_file_size / self.boot_sector.cluster_size as usize) + 1;
-
-        if self
-            .fat
-            .iter()
-            .filter(|&fat_value| *fat_value == FatValue::Free)
-            .count()
-            < required_clusters
-        {
-            return Err(Box::try_from("Not enough space in fat").unwrap());
-        }
-
-        // create the dest file entry and register it in root
-        let dest_file_first_cluster = self
-            .fat
-            .iter()
-            .position(|fat_value| *fat_value == FatValue::Free)
-            .unwrap() as u16;
-        let dest_file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| file_entry.name.is_empty())
-            .unwrap();
-
-        let dest_file_entry = FileEntry::new(
-            request.dest_name.to_owned(),
-            request.dest_extension.to_owned(),
-            src_file_entry.size,
-            dest_file_first_cluster,
-            FileEntryAttributes::File as u8,
-            Utc::now(),
-        );
-        self.root[dest_file_entry_index] = dest_file_entry.clone();
-
-        // iterate through the cluster chain and copy the file content from the storage buffer
-        let mut current_src_cluster_index = src_file_entry.first_cluster as usize;
-        let mut current_dest_cluster_index = dest_file_entry.first_cluster as usize;
-
-        while self.fat[current_src_cluster_index] != FatValue::EndOfChain {
-            self.storage_buffer[current_dest_cluster_index] =
-                self.storage_buffer[current_src_cluster_index].clone();
-
-            let next_dest_cluster_index: u16 = self
-                .fat
-                .iter()
-                .enumerate()
-                .position(|(cluster_index, fat_value)| {
-                    *fat_value == FatValue::Free && cluster_index > current_dest_cluster_index
-                })
-                .unwrap() as u16;
-
-            self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
-            current_dest_cluster_index = next_dest_cluster_index as usize;
-
-            let next_src_cluster_index: u16 = self.fat[current_src_cluster_index].clone().into();
-            current_src_cluster_index = next_src_cluster_index as usize;
-        }
-
-        self.storage_buffer[current_dest_cluster_index] =
-            self.storage_buffer[current_src_cluster_index].clone();
-        self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
-
-        Ok(())
-    }
-
-    fn set_attributes(&mut self, request: &SetAttributesRequest) -> Void {
-        // check if the file exists
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.name && file_entry.extension == request.extension
-        }) {
-            return Err(Box::try_from(format!(
-                "File {}.{} does not exist",
-                request.name, request.extension
-            ))
-            .unwrap());
-        }
-
-        // get the file entry
-        let file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| {
-                file_entry.name == request.name && file_entry.extension == request.extension
-            })
-            .unwrap_or_default();
-
-        // set the attributes
-        // persist the file entry type (file or folder)
-        // as the attributes from the request are only related to hidden or read only flags
-        let file_entry_type_attr =
-            self.root[file_entry_index].attributes & FileEntryAttributes::File as u8;
-        self.root[file_entry_index].attributes = file_entry_type_attr | request.attributes;
-
-        Ok(())
-    }
-
-    fn format_disk(&mut self, request: &FormatRequest) -> Void {
-        // create a new in memory disk representation associated with the new fat type
-        let mut boot_sector = self.get_boot_sector();
-        let disk_size = boot_sector.cluster_size as u32 * boot_sector.cluster_count as u32;
-
-        boot_sector.cluster_size = request.fat_type;
-        boot_sector.cluster_count = (disk_size / (boot_sector.cluster_size as u32)) as u16;
-
-        let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), boot_sector);
-
-        // push sync the new disk representation to the storage
-        new_disk_manager.push_sync();
-
-        Ok(())
-    }
-
-    fn defragment_disk(&mut self) -> Void {
-        // create a new temporary disk representation
-        let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), self.get_boot_sector());
-
-        // iterate over the root file entries
-        for file_entry in self.root.clone().iter() {
-            // skip empty file entries
-            if file_entry.name.is_empty() {
-                continue;
-            }
-
-            // get file content
-            let cat_request =
-                CatRequest::new(file_entry.name.clone(), file_entry.extension.clone());
-            let file_content = self.get_file_content(&cat_request)?;
-
-            // write the file content to the temp buffer file
-            DiskManager::write_to_temp(file_content.as_str())?;
-
-            // create a new file entry in the new disk representation
-            let create_request = CreateRequest::new(
-                file_entry.name.clone(),
-                file_entry.extension.clone(),
-                file_content.len() as u32,
-                ContentType::Temp,
-            );
-            new_disk_manager.create_file(&create_request)?;
-
-            // sync the datetime of the old file entry to the new file entry
-            let new_file_entry = new_disk_manager
-                .root
-                .iter_mut()
-                .find(|new_file_entry| {
-                    new_file_entry.name == file_entry.name
-                        && new_file_entry.extension == file_entry.extension
-                })
-                .unwrap();
-
-            new_file_entry.last_modification_datetime = file_entry.last_modification_datetime;
-        }
-
-        // push sync
-        new_disk_manager.push_sync();
-
-        Ok(())
-    }
-
-    fn get_working_directory(&self) -> String {
-        self.working_directory.name.clone()
-    }
-
-    fn get_boot_sector(&self) -> BootSector {
-        self.boot_sector.clone()
-    }
-
-    fn get_free_space(&mut self) -> u64 {
-        self.pull_sync();
-
-        let free_clusters = self
-            .fat
-            .iter()
-            .filter(|&fat_value| *fat_value == FatValue::Free)
-            .count();
-
-        (free_clusters * self.boot_sector.cluster_size as usize) as u64
-    }
-
-    fn get_total_space(&self) -> u64 {
-        (self.fat.len() * self.boot_sector.cluster_size as usize) as u64
     }
 }

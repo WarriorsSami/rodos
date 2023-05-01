@@ -3,11 +3,16 @@
 macro_rules! prompt {
     ($($arg:tt)*) => {
         cprint!(
-            "<w!>{}</><b!>{}</><w!>{}</><b!>{}</>/<b!>{}</> ",
+            "<w!>{}</><b!>{}</><w!>{}</><b!>{}</>{}<b!>{}</> ",
             CONFIG.prompt.host,
             CONFIG.prompt.separator,
             CONFIG.prompt.user,
             CONFIG.prompt.path_prefix,
+            DISK_ARC
+                .clone()
+                .lock()
+                .unwrap()
+                .get_working_directory_full_path(),
             CONFIG.prompt.terminator
         );
 
@@ -56,7 +61,7 @@ macro_rules! warn {
 macro_rules! info {
     ($fmt:expr $(, $arg:tt)*) => {
         let s = format!($fmt $(, $arg)*);
-        cprintln!("<c>{}</>", s);
+        cprintln!("<c!>{}</>", s);
     };
 }
 

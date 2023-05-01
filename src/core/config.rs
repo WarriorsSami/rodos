@@ -74,7 +74,7 @@ impl Default for Config {
                 name: "rename".to_string(),
                 description: "Rename a file or a directory".to_string(),
                 usage: "rename <old_name> <new_name>".to_string(),
-                regex: r"^\s*rename\s+(?P<old_name>\S+)\.(?P<old_extension>\S+)\s+(?P<new_name>\S+)\.(?P<new_extension>\S+)\s*$".to_string(),
+                regex: r"^\s*rename\s+(?P<old_name>[a-zA-Z0-9_]+)(\.(?P<old_extension>\S+))?\s+(?P<new_name>[a-zA-Z0-9_]+)(\.(?P<new_extension>\S+))?\s*$".to_string(),
             },
         );
 
@@ -83,8 +83,8 @@ impl Default for Config {
             Command {
                 name: "del".to_string(),
                 description: "Delete a file or a directory".to_string(),
-                usage: "del <file_name>.<file_extension>".to_string(),
-                regex: r"^\s*del\s+(?P<name>\S+)\.(?P<extension>\S+)\s*$".to_string(),
+                usage: "del <file_name>.<file_extension> or del <directory_name>".to_string(),
+                regex: r"^\s*del\s+(?P<name>[a-zA-Z0-9_]+)(\.(?P<extension>\S+))?\s*$".to_string(),
             },
         );
 
@@ -104,7 +104,7 @@ impl Default for Config {
                 name: "cp".to_string(),
                 description: "Copy a file".to_string(),
                 usage: "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension>".to_string(),
-                regex: r"^\s*cp\s+(?P<src_name>\S+)\.(?P<src_extension>\S+)\s+(?P<dest_name>\S+)\.(?P<dest_extension>\S+)\s*$".to_string(),
+                regex: r"^\s*cp\s+(?P<src_name>[a-zA-Z0-9_]+)(\.(?P<src_extension>\S+))?\s+(?P<dest_name>[a-zA-Z0-9_]+)(\.(?P<dest_extension>\S+))?\s*$".to_string(),
             },
         );
 
@@ -138,6 +138,46 @@ impl Default for Config {
                 usage: "setattr <file_name>.<file_extension> <attributes>(max 2 blocks, e.g. +w-h, but not +w-h+h)\n<attributes>:\n\t+w: make read-write\n\t-w: make read-only\n\t+h: make hidden\n\t-h: make visible".to_string(),
                 regex: r"^\s*setattr\s+(?P<name>[a-zA-Z0-9_]+)(\.(?P<extension>\S+))?\s+(?P<attributes>((\+|-)(w|h)){1,2})\s*$".to_string(),
             }
+        );
+
+        commands.insert(
+            "mkdir".to_string(),
+            Command {
+                name: "mkdir".to_string(),
+                description: "Create a new directory".to_string(),
+                usage: "mkdir <directory_name>".to_string(),
+                regex: r"^\s*mkdir\s+(?P<name>\S+)\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "cd".to_string(),
+            Command {
+                name: "cd".to_string(),
+                description: "Change the current directory".to_string(),
+                usage: "cd <directory_name>".to_string(),
+                regex: r"^\s*cd\s+(?P<name>\S+)\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "pwd".to_string(),
+            Command {
+                name: "pwd".to_string(),
+                description: "Display the current directory".to_string(),
+                usage: "pwd".to_string(),
+                regex: r"^\s*pwd\s*$".to_string(),
+            },
+        );
+
+        commands.insert(
+            "rmdir".to_string(),
+            Command {
+                name: "rmdir".to_string(),
+                description: "Delete a directory".to_string(),
+                usage: "rmdir <directory_name>".to_string(),
+                regex: r"^\s*rmdir\s+(?P<name>\S+)\s*$".to_string(),
+            },
         );
 
         Self {

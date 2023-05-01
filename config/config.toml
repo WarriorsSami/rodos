@@ -48,13 +48,13 @@ terminator = "$"
     name = "rename"
     description = "Rename a file or a directory"
     usage = "rename <old_name> <new_name>"
-    regex = "^\\s*rename\\s+(?P<old_name>\\S+)\\.(?P<old_extension>\\S+)\\s+(?P<new_name>\\S+)\\.(?P<new_extension>\\S+)\\s*$"
+    regex = "^\\s*rename\\s+(?P<old_name>[a-zA-Z0-9_]+)(\\.(?P<old_extension>\\S+))?\\s+(?P<new_name>[a-zA-Z0-9_]+)(\\.(?P<new_extension>\\S+))?\\s*$"
 
     [commands.del]
     name = "del"
     description = "Delete a file or a directory"
-    usage = "del <file_name>.<file_extension>"
-    regex = "^\\s*del\\s+(?P<name>\\S+)\\.(?P<extension>\\S+)\\s*$"
+    usage = "del <file_name>.<file_extension> or del <directory_name>"
+    regex = "^\\s*del\\s+(?P<name>[a-zA-Z0-9_]+)(\\.(?P<extension>\\S+))?\\s*$"
 
     [commands.cat]
     name = "cat"
@@ -64,9 +64,9 @@ terminator = "$"
 
     [commands.cp]
     name = "cp"
-    description = "Copy a file"
-    usage = "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension>"
-    regex = "^\\s*cp\\s+(?P<src_name>\\S+)\\.(?P<src_extension>\\S+)\\s+(?P<dest_name>\\S+)\\.(?P<dest_extension>\\S+)\\s*$"
+    description = "Copy a file or a directory"
+    usage = "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension> or cp <directory_name> <new_directory_name>"
+    regex = "^\\s*cp\\s+(?P<src_name>[a-zA-Z0-9_]+)(\\.(?P<src_extension>\\S+))?\\s+(?P<dest_name>[a-zA-Z0-9_]+)(\\.(?P<dest_extension>\\S+))?\\s*$"
 
     [commands.fmt]
     name = "fmt"
@@ -85,3 +85,27 @@ terminator = "$"
     description = "Set the attributes of a file or a directory"
     usage = "setattr <file_name>.<file_extension> <attributes>(max 2 blocks, e.g. +w-h, but not +w-h+h)\n<attributes>:\n\t+w: make read-write\n\t-w: make read-only\n\t+h: make hidden\n\t-h: make visible"
     regex = "^\\s*setattr\\s+(?P<name>[a-zA-Z0-9_]+)(\\.(?P<extension>\\S+))?\\s+(?P<attributes>((\\+|-)(w|h)){1,2})\\s*$"
+
+    [commands.mkdir]
+    name = "mkdir"
+    description = "Create a new directory"
+    usage = "mkdir <directory_name>"
+    regex = "^\\s*mkdir\\s+(?P<name>\\S+)\\s*$"
+
+    [commands.cd]
+    name = "cd"
+    description = "Change the current directory"
+    usage = "cd <directory_name>"
+    regex = "^\\s*cd\\s+(?P<name>\\S+)\\s*$"
+
+    [commands.pwd]
+    name = "pwd"
+    description = "Display the current directory"
+    usage = "pwd"
+    regex = "^\\s*pwd\\s*$"
+
+    [commands.rmdir]
+    name = "rmdir"
+    description = "Delete a directory"
+    usage = "rmdir <directory_name>"
+    regex = "^\\s*rmdir\\s+(?P<name>\\S+)\\s*$"

@@ -2,27 +2,34 @@ use crate::application::Void;
 use crate::core::content_type::ContentType;
 use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
+use chrono::{DateTime, Utc};
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
 pub(crate) struct CreateRequest {
-    pub(crate) file_name: String,
-    pub(crate) file_extension: String,
-    pub(crate) file_size: u32,
+    pub(crate) name: String,
+    pub(crate) extension: String,
+    pub(crate) size: u32,
+    pub(crate) attributes: u8,
+    pub(crate) last_modification_datetime: DateTime<Utc>,
     pub(crate) content_type: ContentType,
 }
 
 impl CreateRequest {
     pub(crate) fn new(
-        file_name: String,
-        file_extension: String,
-        file_size: u32,
+        name: String,
+        extension: String,
+        size: u32,
+        attributes: u8,
+        last_modification_datetime: DateTime<Utc>,
         content_type: ContentType,
     ) -> Self {
         Self {
-            file_name,
-            file_extension,
-            file_size,
+            name,
+            extension,
+            size,
+            attributes,
+            last_modification_datetime,
             content_type,
         }
     }
@@ -44,28 +51,32 @@ impl RequestHandler<CreateRequest, Void> for CreateHandler {
     fn handle(&mut self, request: CreateRequest) -> Void {
         log::info!(
             "Creating file {}.{} with dimension {} and content type {}",
-            request.file_name,
-            request.file_extension,
-            request.file_size,
+            request.name,
+            request.extension,
+            request.size,
             request.content_type
         );
         cprintln!(
             "Creating file <b!>{}.{}</> with dimension <y!>{}</> and content type <y!>{}</>...",
-            request.file_name,
-            request.file_extension,
-            request.file_size,
+            request.name,
+            request.extension,
+            request.size,
             request.content_type
         );
 
         match self.disk_manager.lock() {
-            Ok(mut disk_manager) => match disk_manager.create_file(&request) {
-                Ok(_) => {
-                    log::info!("Created file successfully");
-                    disk_manager.push_sync();
-                    Ok(())
+            Ok(mut disk_manager) => {
+                disk_manager.pull_sync();
+
+                match disk_manager.create_file(&request) {
+                    Ok(_) => {
+                        log::info!("Created file successfully");
+                        disk_manager.push_sync();
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Err(_) => Err(Box::try_from("Unable to lock disk manager!").unwrap()),
         }
     }
