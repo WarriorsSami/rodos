@@ -1,9 +1,15 @@
+use crate::application::cat::CatRequest;
+use crate::application::cd::ChangeDirectoryRequest;
+use crate::application::create::CreateRequest;
+use crate::application::mkdir::MakeDirectoryRequest;
 use crate::application::Void;
 use crate::core::config::Config;
+use crate::core::content_type::ContentType;
 use crate::core::Arm;
 use crate::domain::boot_sector::BootSector;
 use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, RootTable};
+use crate::domain::i_disk_manager::IDiskManager;
 use crate::CONFIG;
 use std::io::{Read, Write};
 
@@ -298,97 +304,6 @@ impl DiskManager {
         }
     }
 
-    fn get_path_from_root_to_entry(entry: &FileEntry) -> Vec<String> {
-        let mut path: Vec<String> = Vec::new();
-        let mut current_entry = entry.clone();
-        path.push(current_entry.name.clone());
-
-        while let Some(parent_entry) = &current_entry.parent_entry {
-            let parent_entry = parent_entry.as_ref();
-            path.push(parent_entry.name.clone());
-            current_entry = parent_entry.clone();
-        }
-
-        path.reverse();
-        path
-    }
-
-    fn sync_working_directory_from_root(&mut self) {
-        let path = Self::get_path_from_root_to_entry(&self.working_directory);
-
-        let mut current_entry = self
-            .root
-            .iter()
-            .find(|entry| entry.name == path[1])
-            .unwrap();
-        for path_part in path.iter().skip(2) {
-            let children_entries = current_entry.children_entries.as_ref().unwrap();
-            current_entry = children_entries
-                .iter()
-                .find(|&entry| entry.name == path_part.as_str())
-                .unwrap();
-        }
-
-        self.working_directory = current_entry.clone();
-    }
-
-    pub(in crate::infrastructure) fn get_directory_root_table_as_data(
-        directory: &FileEntry,
-    ) -> Vec<u8> {
-        directory
-            .children_entries
-            .as_ref()
-            .unwrap()
-            .iter()
-            .cloned()
-            .flat_map(|file_entry| {
-                let file_byte_array: ByteArray = file_entry.into();
-                file_byte_array
-            })
-            .collect::<Vec<u8>>()
-    }
-
-    pub(in crate::infrastructure) fn sync_directory_root_table_to_storage(
-        &mut self,
-        dir_entry: &FileEntry,
-    ) {
-        // free old working directory data
-        self.free_clusters(dir_entry);
-
-        // get updated working directory data
-        let mut directory_data = Self::get_directory_root_table_as_data(dir_entry);
-
-        // update fat and storage buffer
-        let mut current_cluster_index = dir_entry.first_cluster;
-
-        while !directory_data.is_empty() {
-            let mut cluster_data: ByteArray = Vec::new();
-            cluster_data
-                .extend_from_slice(&directory_data[..self.boot_sector.cluster_size as usize]);
-            directory_data.drain(..self.boot_sector.cluster_size as usize);
-            self.storage_buffer[current_cluster_index as usize] = cluster_data.clone();
-
-            let next_cluster_index = self
-                .get_next_free_cluster_index_gt(current_cluster_index as usize)
-                .unwrap();
-            self.fat[current_cluster_index as usize] = match directory_data.is_empty() {
-                false => FatValue::from(next_cluster_index as u16),
-                true => FatValue::EndOfChain,
-            };
-
-            current_cluster_index = next_cluster_index as u16;
-        }
-    }
-
-    pub(in crate::infrastructure) fn get_next_free_cluster_index_gt(
-        &self,
-        current_cluster_index: usize,
-    ) -> Option<usize> {
-        self.fat.iter().enumerate().position(|(index, fat_value)| {
-            *fat_value == FatValue::Free && index > current_cluster_index
-        })
-    }
-
     pub(in crate::infrastructure) fn link_root_table_to_directory(
         &mut self,
         directory_entry: &mut FileEntry,
@@ -443,6 +358,97 @@ impl DiskManager {
         self.sync_directory_root_table_to_storage(directory_entry);
     }
 
+    fn sync_working_directory_from_root(&mut self) {
+        let path = Self::get_path_from_root_to_entry(&self.working_directory);
+
+        let mut current_entry = self
+            .root
+            .iter()
+            .find(|entry| entry.name == path[1])
+            .unwrap();
+        for path_part in path.iter().skip(2) {
+            let children_entries = current_entry.children_entries.as_ref().unwrap();
+            current_entry = children_entries
+                .iter()
+                .find(|&entry| entry.name == path_part.as_str())
+                .unwrap();
+        }
+
+        self.working_directory = current_entry.clone();
+    }
+
+    fn get_path_from_root_to_entry(entry: &FileEntry) -> Vec<String> {
+        let mut path: Vec<String> = Vec::new();
+        let mut current_entry = entry.clone();
+        path.push(current_entry.name.clone());
+
+        while let Some(parent_entry) = &current_entry.parent_entry {
+            let parent_entry = parent_entry.as_ref();
+            path.push(parent_entry.name.clone());
+            current_entry = parent_entry.clone();
+        }
+
+        path.reverse();
+        path
+    }
+
+    pub(in crate::infrastructure) fn serialize_directory_root_table(
+        directory: &FileEntry,
+    ) -> Vec<u8> {
+        directory
+            .children_entries
+            .as_ref()
+            .unwrap()
+            .iter()
+            .cloned()
+            .flat_map(|file_entry| {
+                let file_byte_array: ByteArray = file_entry.into();
+                file_byte_array
+            })
+            .collect::<Vec<u8>>()
+    }
+
+    pub(in crate::infrastructure) fn sync_directory_root_table_to_storage(
+        &mut self,
+        dir_entry: &FileEntry,
+    ) {
+        // free old working directory data
+        self.free_clusters(dir_entry);
+
+        // get updated working directory data
+        let mut directory_data = Self::serialize_directory_root_table(dir_entry);
+
+        // update fat and storage buffer
+        let mut current_cluster_index = dir_entry.first_cluster;
+
+        while !directory_data.is_empty() {
+            let mut cluster_data: ByteArray = Vec::new();
+            cluster_data
+                .extend_from_slice(&directory_data[..self.boot_sector.cluster_size as usize]);
+            directory_data.drain(..self.boot_sector.cluster_size as usize);
+            self.storage_buffer[current_cluster_index as usize] = cluster_data.clone();
+
+            let next_cluster_index = self
+                .get_next_free_cluster_index_gt(current_cluster_index as usize)
+                .unwrap();
+            self.fat[current_cluster_index as usize] = match directory_data.is_empty() {
+                false => FatValue::from(next_cluster_index as u16),
+                true => FatValue::EndOfChain,
+            };
+
+            current_cluster_index = next_cluster_index as u16;
+        }
+    }
+
+    pub(in crate::infrastructure) fn get_next_free_cluster_index_gt(
+        &self,
+        current_cluster_index: usize,
+    ) -> Option<usize> {
+        self.fat.iter().enumerate().position(|(index, fat_value)| {
+            *fat_value == FatValue::Free && index > current_cluster_index
+        })
+    }
+
     pub(in crate::infrastructure) fn free_clusters(&mut self, file_entry: &FileEntry) {
         // delete file entry associated data
         let mut cluster_index = file_entry.first_cluster as usize;
@@ -474,7 +480,75 @@ impl DiskManager {
         }
     }
 
-    pub(in crate::infrastructure) fn write_to_temp(file_content: &str) -> Void {
+    pub(in crate::infrastructure) fn inflate_directory_tree(
+        &mut self,
+        disk_manager: &mut DiskManager,
+        dir_entry: &FileEntry,
+    ) -> Void {
+        // change working directory to dir_entry
+        let cd_request = ChangeDirectoryRequest::new(dir_entry.name.clone());
+        disk_manager.change_working_directory(&cd_request)?;
+
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        // iterate over all children entries
+        let root_table = dir_entry.children_entries.as_ref();
+
+        if let Some(root_table) = root_table {
+            for entry in root_table.iter() {
+                if entry.name == "." || entry.name == ".." {
+                    continue;
+                }
+
+                match entry.is_file() {
+                    true => {
+                        // get file content
+                        let cat_request =
+                            CatRequest::new(entry.name.clone(), entry.extension.clone());
+                        let file_content = self.get_file_content(&cat_request)?;
+
+                        // write the file content to the temp buffer file
+                        DiskManager::write_to_temp_buffer(file_content.as_str())?;
+
+                        // create the file entry
+                        let create_request = CreateRequest::new(
+                            entry.name.clone(),
+                            entry.extension.clone(),
+                            file_content.len() as u32,
+                            entry.attributes,
+                            entry.last_modification_datetime,
+                            ContentType::Temp,
+                        );
+                        disk_manager.create_file(&create_request)?;
+                    }
+                    false => {
+                        // create the directory entry
+                        let make_directory_request = MakeDirectoryRequest::new(
+                            entry.name.clone(),
+                            entry.attributes,
+                            entry.last_modification_datetime,
+                        );
+                        disk_manager.make_directory(&make_directory_request)?;
+
+                        // iterate over the directory's root table and recreate the dir tree in the new disk representation
+                        self.inflate_directory_tree(disk_manager, entry)?;
+                    }
+                }
+            }
+        }
+
+        // change working directory back to parent
+        let cd_request = ChangeDirectoryRequest::new("..".to_string());
+        disk_manager.change_working_directory(&cd_request)?;
+
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn write_to_temp_buffer(file_content: &str) -> Void {
         let mut temp_file = std::fs::File::create(CONFIG.temp_file_path.clone())?;
         temp_file.write_all(file_content.as_bytes())?;
 
@@ -484,7 +558,10 @@ impl DiskManager {
     pub(in crate::infrastructure) fn get_root_table_for_working_directory(
         &mut self,
     ) -> &mut RootTable {
-        self.working_directory.children_entries.as_mut().unwrap()
+        match self.working_directory.name == "/" {
+            true => &mut self.root,
+            false => self.working_directory.children_entries.as_mut().unwrap(),
+        }
     }
 
     pub(in crate::infrastructure) fn append_to_root_table_of_working_dir(

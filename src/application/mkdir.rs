@@ -1,15 +1,26 @@
 use crate::application::Void;
 use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
+use chrono::{DateTime, Utc};
 use mediator::{Request, RequestHandler};
 
 pub(crate) struct MakeDirectoryRequest {
     pub(crate) name: String,
+    pub(crate) attributes: u8,
+    pub(crate) last_modification_datetime: DateTime<Utc>,
 }
 
 impl MakeDirectoryRequest {
-    pub(crate) fn new(name: String) -> Self {
-        Self { name }
+    pub(crate) fn new(
+        name: String,
+        attributes: u8,
+        last_modification_datetime: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            name,
+            attributes,
+            last_modification_datetime,
+        }
     }
 }
 

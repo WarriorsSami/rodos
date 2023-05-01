@@ -18,6 +18,7 @@ use crate::core::filter_type::FilterType;
 use crate::core::sort_type::SortType;
 use crate::domain::file_entry::FileEntryAttributes;
 use crate::{info, CONFIG};
+use chrono::Utc;
 use color_print::cprintln;
 use std::error::Error;
 
@@ -120,6 +121,12 @@ impl CliParser {
                 name.to_string(),
                 extension.to_string(),
                 dim,
+                FileEntryAttributes::combine(&[
+                    FileEntryAttributes::File,
+                    FileEntryAttributes::ReadWrite,
+                    FileEntryAttributes::Visible,
+                ]),
+                Utc::now(),
                 content_type,
             ))
         } else {
@@ -452,7 +459,15 @@ impl CliParser {
             }
 
             log::info!("Mkdir command parsed successfully: {}", input);
-            Ok(MakeDirectoryRequest::new(name.to_string()))
+            Ok(MakeDirectoryRequest::new(
+                name.to_string(),
+                FileEntryAttributes::combine(&[
+                    FileEntryAttributes::Directory,
+                    FileEntryAttributes::ReadWrite,
+                    FileEntryAttributes::Visible,
+                ]),
+                Utc::now(),
+            ))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid mkdir command syntax!").unwrap())

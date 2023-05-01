@@ -40,13 +40,12 @@ impl IDiskManager for DiskManager {
             .get_root_table_for_working_directory()
             .iter()
             .any(|file_entry| {
-                file_entry.name == request.file_name
-                    && file_entry.extension == request.file_extension
+                file_entry.name == request.name && file_entry.extension == request.extension
             })
         {
             return Err(Box::try_from(format!(
                 "File {}.{} already exists",
-                request.file_name, request.file_extension
+                request.name, request.extension
             ))
             .unwrap());
         }
@@ -63,7 +62,7 @@ impl IDiskManager for DiskManager {
 
         // check if there is enough space in fat
         let required_clusters =
-            (request.file_size as f64 / self.boot_sector.cluster_size as f64).ceil() as usize;
+            (request.size as f64 / self.boot_sector.cluster_size as f64).ceil() as usize;
         if self
             .fat
             .iter()
@@ -79,24 +78,20 @@ impl IDiskManager for DiskManager {
 
         // create file entry in root
         let file_entry = FileEntry::new(
-            request.file_name.to_owned(),
-            request.file_extension.to_owned(),
-            request.file_size.to_owned(),
+            request.name.to_owned(),
+            request.extension.to_owned(),
+            request.size.to_owned(),
             first_cluster as u16,
-            FileEntryAttributes::combine(&[
-                FileEntryAttributes::File,
-                FileEntryAttributes::ReadWrite,
-                FileEntryAttributes::Visible,
-            ]),
-            Utc::now(),
+            request.attributes,
+            request.last_modification_datetime,
             Some(Box::new(self.working_directory.clone())),
             None,
         );
 
         // create the cluster chain in fat and write the file data to the storage buffer
         let mut current_cluster_index = first_cluster;
-        let mut remaining_file_size = request.file_size as u16;
-        let mut file_data = ContentGenerator::generate(request.content_type, request.file_size);
+        let mut remaining_file_size = request.size as u16;
+        let mut file_data = ContentGenerator::generate(request.content_type, request.size);
 
         while remaining_file_size > 0 {
             match self.get_next_free_cluster_index_gt(current_cluster_index) {
@@ -618,44 +613,41 @@ impl IDiskManager for DiskManager {
                 continue;
             }
 
-            // get file content
-            let cat_request =
-                CatRequest::new(file_entry.name.clone(), file_entry.extension.clone());
-            let file_content = self.get_file_content(&cat_request)?;
-
-            // write the file content to the temp buffer file
-            DiskManager::write_to_temp(file_content.as_str())?;
-
             // create a new file entry in the new disk representation
             match file_entry.is_file() {
                 true => {
+                    // get file content
+                    let cat_request =
+                        CatRequest::new(file_entry.name.clone(), file_entry.extension.clone());
+                    let file_content = self.get_file_content(&cat_request)?;
+
+                    // write the file content to the temp buffer file
+                    DiskManager::write_to_temp_buffer(file_content.as_str())?;
+
+                    // create the file entry
                     let create_request = CreateRequest::new(
                         file_entry.name.clone(),
                         file_entry.extension.clone(),
                         file_content.len() as u32,
+                        file_entry.attributes,
+                        file_entry.last_modification_datetime,
                         ContentType::Temp,
                     );
                     new_disk_manager.create_file(&create_request)?;
                 }
                 false => {
-                    let make_directory_request = MakeDirectoryRequest::new(file_entry.name.clone());
+                    // create the directory entry
+                    let make_directory_request = MakeDirectoryRequest::new(
+                        file_entry.name.clone(),
+                        file_entry.attributes,
+                        file_entry.last_modification_datetime,
+                    );
                     new_disk_manager.make_directory(&make_directory_request)?;
-                    // TODO: do not forget to create the children entries too
+
+                    // iterate over the directory's root table and recreate the dir tree in the new disk representation
+                    self.inflate_directory_tree(&mut new_disk_manager, file_entry)?;
                 }
             }
-
-            // sync the datetime of the old file entry to the new file entry
-            let new_file_entry = new_disk_manager
-                .root
-                .iter_mut()
-                .find(|new_file_entry| {
-                    new_file_entry.name == file_entry.name
-                        && new_file_entry.extension == file_entry.extension
-                })
-                .unwrap();
-
-            // TODO: update the create/make dir requests to include the datetime/attributes
-            new_file_entry.last_modification_datetime = file_entry.last_modification_datetime;
         }
 
         // push sync
@@ -699,12 +691,8 @@ impl IDiskManager for DiskManager {
             "".to_string(),
             (self.boot_sector.root_entry_cell_size * 2) as u32,
             first_cluster_index,
-            FileEntryAttributes::combine(&[
-                FileEntryAttributes::Directory,
-                FileEntryAttributes::ReadWrite,
-                FileEntryAttributes::Visible,
-            ]),
-            Utc::now(),
+            request.attributes,
+            request.last_modification_datetime,
             Some(Box::new(self.working_directory.clone())),
             Some(Vec::new()),
         );
@@ -731,7 +719,7 @@ impl IDiskManager for DiskManager {
         // update the fat and the storage
         let mut current_cluster_index = first_cluster_index as usize;
         let mut remaining_file_size = dir_file_entry.size as u16;
-        let mut file_data = DiskManager::get_directory_root_table_as_data(&dir_file_entry);
+        let mut file_data = DiskManager::serialize_directory_root_table(&dir_file_entry);
 
         while remaining_file_size > 0 {
             match self.get_next_free_cluster_index_gt(current_cluster_index) {
