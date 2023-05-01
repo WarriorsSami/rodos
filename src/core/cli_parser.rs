@@ -332,39 +332,80 @@ impl CliParser {
 
         if let Some(captures) = captures {
             let src_name = captures.name("src_name").unwrap().as_str();
-            let src_extension = captures.name("src_extension").unwrap().as_str();
-            let dst_name = captures.name("dest_name").unwrap().as_str();
-            let dst_extension = captures.name("dest_extension").unwrap().as_str();
+            let src_extension = captures.name("src_extension");
+            let dest_name = captures.name("dest_name").unwrap().as_str();
+            let dest_extension = captures.name("dest_extension");
 
-            if src_name.len() > 8 {
-                return Err(Box::try_from("Source name must be 8 characters or less!").unwrap());
+            match (src_extension, dest_extension) {
+                (Some(src_extension), Some(dest_extension)) => {
+                    let src_extension = src_extension.as_str();
+                    let dest_extension = dest_extension.as_str();
+
+                    if src_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Source name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if src_extension.len() > 3 {
+                        return Err(Box::try_from(
+                            "Source extension must be 3 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    if dest_name.len() > 8 {
+                        return Err(Box::try_from(
+                            "Destination name must be 8 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    if dest_extension.len() > 3 {
+                        return Err(Box::try_from(
+                            "Destination extension must be 3 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    log::info!("Copy command parsed successfully: {}", input);
+                    Ok(CopyRequest::new(
+                        src_name.to_string(),
+                        src_extension.to_string(),
+                        dest_name.to_string(),
+                        dest_extension.to_string(),
+                    ))
+                }
+                (None, None) => {
+                    if src_name.len() > 8 {
+                        return Err(
+                            Box::try_from("Source name must be 8 characters or less!").unwrap()
+                        );
+                    }
+
+                    if dest_name.len() > 8 {
+                        return Err(Box::try_from(
+                            "Destination name must be 8 characters or less!",
+                        )
+                        .unwrap());
+                    }
+
+                    log::info!("Copy command parsed successfully: {}", input);
+                    Ok(CopyRequest::new(
+                        src_name.to_string(),
+                        "".to_string(),
+                        dest_name.to_string(),
+                        "".to_string(),
+                    ))
+                }
+                _ => {
+                    info!("Usage: {}", usage);
+                    Err(
+                        Box::try_from("Cannot copy a file with a directory name or vice versa!")
+                            .unwrap(),
+                    )
+                }
             }
-
-            if src_extension.len() > 3 {
-                return Err(
-                    Box::try_from("Source extension must be 3 characters or less!").unwrap(),
-                );
-            }
-
-            if dst_name.len() > 8 {
-                return Err(
-                    Box::try_from("Destination name must be 8 characters or less!").unwrap(),
-                );
-            }
-
-            if dst_extension.len() > 3 {
-                return Err(
-                    Box::try_from("Destination extension must be 3 characters or less!").unwrap(),
-                );
-            }
-
-            log::info!("Copy command parsed successfully: {}", input);
-            Ok(CopyRequest::new(
-                src_name.to_string(),
-                src_extension.to_string(),
-                dst_name.to_string(),
-                dst_extension.to_string(),
-            ))
         } else {
             info!("Usage: {}", usage);
             Err(Box::try_from("Invalid copy command syntax!").unwrap())

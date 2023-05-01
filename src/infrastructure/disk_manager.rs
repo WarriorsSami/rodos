@@ -11,6 +11,7 @@ use crate::domain::fat::{FatTable, FatValue};
 use crate::domain::file_entry::{FileEntry, RootTable};
 use crate::domain::i_disk_manager::IDiskManager;
 use crate::CONFIG;
+use chrono::Utc;
 use std::io::{Read, Write};
 
 pub(crate) type ByteArray = Vec<u8>;
@@ -478,6 +479,109 @@ impl DiskManager {
                 self.sync_directory_root_table_to_storage(&self.working_directory.clone());
             }
         }
+    }
+
+    pub(in crate::infrastructure) fn change_working_directory_to_root(&mut self) -> Void {
+        while !self.working_directory.is_root() {
+            let cd_request = ChangeDirectoryRequest::new("..".to_string());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
+        }
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn change_working_directory_to(
+        &mut self,
+        dir_entry: &FileEntry,
+    ) -> Void {
+        self.change_working_directory_to_root()?;
+
+        let path = Self::get_path_from_root_to_entry(dir_entry);
+
+        for path_part in path.iter().skip(1) {
+            let cd_request = ChangeDirectoryRequest::new(path_part.clone());
+            self.pull_sync();
+            self.change_working_directory(&cd_request)?;
+        }
+
+        Ok(())
+    }
+
+    pub(in crate::infrastructure) fn inflate_directory_tree_inline(
+        &mut self,
+        src_dir_entry: &FileEntry,
+        dest_dir_name: String,
+    ) -> Void {
+        // change working directory to dir_entry
+        let cd_request = ChangeDirectoryRequest::new(dest_dir_name);
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        // iterate over all children entries
+        let root_table = src_dir_entry.children_entries.as_ref();
+
+        if let Some(root_table) = root_table {
+            for entry in root_table.iter() {
+                if entry.name == "." || entry.name == ".." {
+                    continue;
+                }
+
+                match entry.is_file() {
+                    true => {
+                        // save the current working directory
+                        let current_working_directory = self.working_directory.clone();
+
+                        // change working directory to src directory
+                        self.change_working_directory_to(src_dir_entry)?;
+
+                        // get file content
+                        let cat_request =
+                            CatRequest::new(entry.name.clone(), entry.extension.clone());
+                        let file_content = self.get_file_content(&cat_request)?;
+
+                        // change working directory back to dest directory
+                        self.change_working_directory_to(&current_working_directory)?;
+
+                        // write the file content to the temp buffer file
+                        DiskManager::write_to_temp_buffer(file_content.as_str())?;
+
+                        // create the file entry
+                        let create_request = CreateRequest::new(
+                            entry.name.clone(),
+                            entry.extension.clone(),
+                            file_content.len() as u32,
+                            entry.attributes,
+                            Utc::now(),
+                            ContentType::Temp,
+                        );
+                        self.create_file(&create_request)?;
+                        self.push_sync();
+                    }
+                    false => {
+                        // create the directory entry
+                        let make_directory_request = MakeDirectoryRequest::new(
+                            entry.name.clone(),
+                            entry.attributes,
+                            Utc::now(),
+                        );
+                        self.pull_sync();
+                        self.make_directory(&make_directory_request)?;
+                        self.push_sync();
+
+                        // iterate over the directory's root table and recreate the dir tree in the new disk representation
+                        self.inflate_directory_tree_inline(entry, entry.name.clone())?;
+                    }
+                }
+            }
+        }
+
+        // change working directory back to parent
+        let cd_request = ChangeDirectoryRequest::new("..".to_string());
+        self.pull_sync();
+        self.change_working_directory(&cd_request)?;
+
+        Ok(())
     }
 
     pub(in crate::infrastructure) fn inflate_directory_tree(

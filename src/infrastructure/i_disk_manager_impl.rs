@@ -433,7 +433,7 @@ impl IDiskManager for DiskManager {
     }
 
     fn copy_file(&mut self, request: &CopyRequest) -> Void {
-        // check if the src file exists in root
+        // check if the src file exists in the working directory root table
         if !self
             .get_root_table_for_working_directory()
             .iter()
@@ -448,7 +448,7 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        // check if the dest file already exists in root
+        // check if the dest file already exists in the working directory root table
         if self
             .get_root_table_for_working_directory()
             .iter()
@@ -498,44 +498,63 @@ impl IDiskManager for DiskManager {
             return Err(Box::try_from("Not enough space in fat").unwrap());
         }
 
-        // create the dest file entry
-        let dest_file_first_cluster = self.get_next_free_cluster_index_gt(0).unwrap() as u16;
-        let dest_file_entry = FileEntry::new(
-            request.dest_name.to_owned(),
-            request.dest_extension.to_owned(),
-            src_file_entry.size,
-            dest_file_first_cluster,
-            src_file_entry.attributes,
-            Utc::now(),
-            src_file_entry.parent_entry.clone(),
-            src_file_entry.children_entries.clone(),
-        );
+        match src_file_entry.is_file() {
+            true => {
+                // create the dest file entry
+                let dest_file_first_cluster =
+                    self.get_next_free_cluster_index_gt(0).unwrap() as u16;
+                let dest_file_entry = FileEntry::new(
+                    request.dest_name.to_owned(),
+                    request.dest_extension.to_owned(),
+                    src_file_entry.size,
+                    dest_file_first_cluster,
+                    src_file_entry.attributes,
+                    Utc::now(),
+                    src_file_entry.parent_entry.clone(),
+                    src_file_entry.children_entries.clone(),
+                );
 
-        // iterate through the cluster chain and copy the file content from the storage buffer
-        let mut current_src_cluster_index = src_file_entry.first_cluster as usize;
-        let mut current_dest_cluster_index = dest_file_entry.first_cluster as usize;
+                // iterate through the cluster chain and copy the file content from the storage buffer
+                let mut current_src_cluster_index = src_file_entry.first_cluster as usize;
+                let mut current_dest_cluster_index = dest_file_entry.first_cluster as usize;
 
-        while self.fat[current_src_cluster_index] != FatValue::EndOfChain {
-            self.storage_buffer[current_dest_cluster_index] =
-                self.storage_buffer[current_src_cluster_index].clone();
+                while self.fat[current_src_cluster_index] != FatValue::EndOfChain {
+                    self.storage_buffer[current_dest_cluster_index] =
+                        self.storage_buffer[current_src_cluster_index].clone();
 
-            let next_dest_cluster_index: u16 = self
-                .get_next_free_cluster_index_gt(current_dest_cluster_index)
-                .unwrap() as u16;
+                    let next_dest_cluster_index: u16 = self
+                        .get_next_free_cluster_index_gt(current_dest_cluster_index)
+                        .unwrap() as u16;
 
-            self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
-            current_dest_cluster_index = next_dest_cluster_index as usize;
+                    self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
+                    current_dest_cluster_index = next_dest_cluster_index as usize;
 
-            let next_src_cluster_index: u16 = self.fat[current_src_cluster_index].clone().into();
-            current_src_cluster_index = next_src_cluster_index as usize;
+                    let next_src_cluster_index: u16 =
+                        self.fat[current_src_cluster_index].clone().into();
+                    current_src_cluster_index = next_src_cluster_index as usize;
+                }
+
+                self.storage_buffer[current_dest_cluster_index] =
+                    self.storage_buffer[current_src_cluster_index].clone();
+                self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
+
+                // append the dest file entry to the root table of the working directory
+                self.append_to_root_table_of_working_dir(dest_file_entry)?;
+            }
+            false => {
+                // create the directory entry
+                let make_directory_request = MakeDirectoryRequest::new(
+                    request.dest_name.clone(),
+                    src_file_entry.attributes,
+                    Utc::now(),
+                );
+                self.make_directory(&make_directory_request)?;
+                self.push_sync();
+
+                // iterate over the src directory's root table and recreate the dir tree in the dest directory
+                self.inflate_directory_tree_inline(&src_file_entry, request.dest_name.clone())?;
+            }
         }
-
-        self.storage_buffer[current_dest_cluster_index] =
-            self.storage_buffer[current_src_cluster_index].clone();
-        self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
-
-        // append the dest file entry to the root table of the working directory
-        self.append_to_root_table_of_working_dir(dest_file_entry)?;
 
         Ok(())
     }

@@ -64,9 +64,9 @@ terminator = "$"
 
     [commands.cp]
     name = "cp"
-    description = "Copy a file"
-    usage = "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension>"
-    regex = "^\\s*cp\\s+(?P<src_name>\\S+)\\.(?P<src_extension>\\S+)\\s+(?P<dest_name>\\S+)\\.(?P<dest_extension>\\S+)\\s*$"
+    description = "Copy a file or a directory"
+    usage = "cp <file_name>.<file_extension> <new_file_name>.<new_file_extension> or cp <directory_name> <new_directory_name>"
+    regex = "^\\s*cp\\s+(?P<src_name>[a-zA-Z0-9_]+)(\\.(?P<src_extension>\\S+))?\\s+(?P<dest_name>[a-zA-Z0-9_]+)(\\.(?P<dest_extension>\\S+))?\\s*$"
 
     [commands.fmt]
     name = "fmt"

@@ -48,7 +48,7 @@ impl RequestHandler<ChangeDirectoryRequest, Void> for ChangeDirectoryHandler {
                     }
                     Err(err) => {
                         log::error!("Failed to change directory: {}", err);
-                        Err(Box::try_from("Failed to change directory").unwrap())
+                        Err(err)
                     }
                 }
             }
