@@ -797,16 +797,24 @@ impl IDiskManager for DiskManager {
 
     fn change_working_directory(&mut self, request: &ChangeDirectoryRequest) -> Void {
         // check if the directory exists
-        if !self
-            .get_root_table_for_working_directory()
-            .iter()
-            .any(|file_entry| file_entry.name == request.directory_name && !file_entry.is_file())
+        if request.directory_name != "/"
+            && !self
+                .get_root_table_for_working_directory()
+                .iter()
+                .any(|file_entry| {
+                    file_entry.name == request.directory_name && !file_entry.is_file()
+                })
         {
             return Err(Box::try_from(format!(
                 "Directory {} does not exist",
                 request.directory_name
             ))
             .unwrap());
+        }
+
+        if request.directory_name == "/" {
+            self.change_working_directory_to_root()?;
+            return Ok(());
         }
 
         if request.directory_name == "." {
