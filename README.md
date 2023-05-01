@@ -18,7 +18,7 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     - setattr cannot modify the file/folder attribute
 - Commands:
   - **neofetch** - print system information
-  - **ls** - list files in current directory:
+  - **ls** **[-\<filter>]** **[-name=<file_name>]** **[-ext=<file_extension>]** **[-\<sort>]** - list files in current directory by applying given filters and sorting options:
     ```bash
     rouser@rodos:~$ ls
     
@@ -29,7 +29,20 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
     
     Free space: 1.5 MB 
     ```
-    - compute by relating to allocated clusters
+    - compute free space by relating to allocated clusters
+    - **\<filter>**:
+      - *a*: show all visible files and directories
+      - *h*: show all files and directories including hidden ones
+      - *s*: show files and directories in short format (name and extension)
+      - *l*: show files and directories in detailed format (attributes, name, extension, last modification date and size in bytes)
+      - *f*: show all files
+      - *d*: show all directories
+    - **\<sort>**:
+      - *n*: sort by name
+      - *t*: sort by last modification date
+      - *sz*: sort by size
+      - **a*: sort in ascending order
+      - **d*: sort in descending order
   - **create** `file_name` `dimension/none` `alfa/num/stdin` - create a file:
     ```bash
     rouser@rodos:~$ create a.txt 20 alfa
@@ -86,14 +99,14 @@ But don't be fooled by its simplicity - RoDOS packs a punch with its lean and re
   - move all the files to the beginning of the disk
   - update the ROOT directory
   - update the FAT table
-- **setattr** `file_name` `attr` - set the attribute of a file:
+- **setattr** `file_name` `attrs` - set the attribute of a file:
   ```bash
-  rouser@rodos:~$ setattr a.txt hd
+  rouser@rodos:~$ setattr a.txt +w-h
   
-  a.txt attribute set to hidden
+  File attributes set successfully
   ```
   - set the attribute of a file entry in the ROOT directory
-  - possible attributes: hidden, read-only, read-write, system, folder/file
+  - possible attributes: visible (-h), hidden (+h), read-only (-w), read-write (+w)
 - **fmt** `fat_type` - format the disk:
   ```bash
   rouser@rodos:~$ fmt 32
