@@ -38,11 +38,11 @@ impl RequestHandler<ChangeDirectoryRequest, Void> for ChangeDirectoryHandler {
                     Ok(_) => {
                         log::info!(
                             "Changed directory successfully to {}",
-                            disk_manager.get_working_directory()
+                            disk_manager.get_working_directory_full_path()
                         );
                         cprintln!(
                             "<g!>Changed directory successfully to</> <c!>{}</>",
-                            disk_manager.get_working_directory()
+                            disk_manager.get_working_directory_full_path()
                         );
                         Ok(())
                     }

@@ -32,7 +32,7 @@ impl RequestHandler<PwdRequest, Void> for PwdHandler {
         match self.disk_manager.lock() {
             Ok(mut disk_manager) => {
                 disk_manager.pull_sync();
-                let current_directory = disk_manager.get_working_directory();
+                let current_directory = disk_manager.get_working_directory_full_path();
                 info!("{}", current_directory);
 
                 log::info!("Current directory is {}", current_directory);

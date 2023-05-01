@@ -432,12 +432,15 @@ impl IDiskManager for DiskManager {
         Ok(content)
     }
 
-    // TODO: add support for folders in copy
     fn copy_file(&mut self, request: &CopyRequest) -> Void {
         // check if the src file exists in root
-        if !self.root.iter().any(|file_entry| {
-            file_entry.name == request.src_name && file_entry.extension == request.src_extension
-        }) {
+        if !self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.src_name && file_entry.extension == request.src_extension
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} does not exist",
                 request.src_name, request.src_extension
@@ -446,9 +449,14 @@ impl IDiskManager for DiskManager {
         }
 
         // check if the dest file already exists in root
-        if self.root.iter().any(|file_entry| {
-            file_entry.name == request.dest_name && file_entry.extension == request.dest_extension
-        }) {
+        if self
+            .get_root_table_for_working_directory()
+            .iter()
+            .any(|file_entry| {
+                file_entry.name == request.dest_name
+                    && file_entry.extension == request.dest_extension
+            })
+        {
             return Err(Box::try_from(format!(
                 "File {}.{} already exists",
                 request.dest_name, request.dest_extension
@@ -456,28 +464,29 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
-        // check if there are empty entries in root
-        if !self
-            .root
-            .iter()
-            .any(|file_entry| file_entry.name.is_empty())
+        // check if there are empty entries in root when working directory is root
+        if self.working_directory.is_root()
+            && !self
+                .root
+                .iter()
+                .any(|file_entry| file_entry.name.is_empty())
         {
             return Err(Box::try_from("No empty entries in root").unwrap());
         }
 
         // get the src file entry
-        let src_file_entry_index = self
-            .root
+        let src_file_entry = self
+            .get_root_table_for_working_directory()
             .iter()
-            .position(|file_entry| {
+            .find(|file_entry| {
                 file_entry.name == request.src_name && file_entry.extension == request.src_extension
             })
-            .unwrap_or_default();
+            .cloned()
+            .unwrap();
 
         // check if there is enough space in fat
-        let src_file_entry = self.root[src_file_entry_index].clone();
-        let src_file_size = src_file_entry.size as usize;
-        let required_clusters = (src_file_size / self.boot_sector.cluster_size as usize) + 1;
+        let required_clusters =
+            (src_file_entry.size as f32 / self.boot_sector.cluster_size as f32).ceil() as usize;
 
         if self
             .fat
@@ -489,25 +498,18 @@ impl IDiskManager for DiskManager {
             return Err(Box::try_from("Not enough space in fat").unwrap());
         }
 
-        // create the dest file entry and register it in root
+        // create the dest file entry
         let dest_file_first_cluster = self.get_next_free_cluster_index_gt(0).unwrap() as u16;
-        let dest_file_entry_index = self
-            .root
-            .iter()
-            .position(|file_entry| file_entry.name.is_empty())
-            .unwrap();
-
         let dest_file_entry = FileEntry::new(
             request.dest_name.to_owned(),
             request.dest_extension.to_owned(),
             src_file_entry.size,
             dest_file_first_cluster,
-            FileEntryAttributes::File as u8,
+            src_file_entry.attributes,
             Utc::now(),
-            src_file_entry.parent_entry,
-            src_file_entry.children_entries,
+            src_file_entry.parent_entry.clone(),
+            src_file_entry.children_entries.clone(),
         );
-        self.root[dest_file_entry_index] = dest_file_entry.clone();
 
         // iterate through the cluster chain and copy the file content from the storage buffer
         let mut current_src_cluster_index = src_file_entry.first_cluster as usize;
@@ -531,6 +533,9 @@ impl IDiskManager for DiskManager {
         self.storage_buffer[current_dest_cluster_index] =
             self.storage_buffer[current_src_cluster_index].clone();
         self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
+
+        // append the dest file entry to the root table of the working directory
+        self.append_to_root_table_of_working_dir(dest_file_entry)?;
 
         Ok(())
     }
@@ -796,7 +801,7 @@ impl IDiskManager for DiskManager {
         Ok(())
     }
 
-    fn get_working_directory(&self) -> String {
+    fn get_working_directory_full_path(&self) -> String {
         // construct the whole path from the root to the working directory
         let mut dirs: Vec<&str> = Vec::new();
         dirs.push(&self.working_directory.name);

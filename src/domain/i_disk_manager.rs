@@ -111,7 +111,7 @@ pub(crate) trait IDiskManager: Sync + Send {
     fn change_working_directory(&mut self, request: &ChangeDirectoryRequest) -> Void;
 
     /// Returns the whole path to the working directory
-    fn get_working_directory(&self) -> String;
+    fn get_working_directory_full_path(&self) -> String;
 
     /// Get boot sector
     fn get_boot_sector(&self) -> &BootSector;

@@ -8,7 +8,11 @@ macro_rules! prompt {
             CONFIG.prompt.separator,
             CONFIG.prompt.user,
             CONFIG.prompt.path_prefix,
-            DISK_ARC.clone().lock().unwrap().get_working_directory(),
+            DISK_ARC
+                .clone()
+                .lock()
+                .unwrap()
+                .get_working_directory_full_path(),
             CONFIG.prompt.terminator
         );
 

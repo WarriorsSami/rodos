@@ -41,7 +41,7 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                     Ok(file_entries) => {
                         cprintln!(
                             "<w!>Current dir `{}`</>: <b!>{} file(s)</>",
-                            disk_manager.get_working_directory(),
+                            disk_manager.get_working_directory_full_path(),
                             file_entries.len()
                         );
 
