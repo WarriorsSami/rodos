@@ -423,8 +423,12 @@ impl IDiskManager for DiskManager {
         }
 
         // push the remaining content
-        let remaining_content_size =
+        let mut remaining_content_size =
             file_entry.size as usize % self.boot_sector.cluster_size as usize;
+        if file_entry.size != 0 && remaining_content_size == 0 {
+            remaining_content_size += self.boot_sector.cluster_size as usize;
+        }
+
         content.push_str(&String::from_utf8_lossy(
             &self.storage_buffer[current_cluster][..remaining_content_size],
         ));
