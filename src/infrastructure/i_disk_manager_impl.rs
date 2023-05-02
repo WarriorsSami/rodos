@@ -1,13 +1,13 @@
-use crate::application::cat::CatRequest;
-use crate::application::cd::ChangeDirectoryRequest;
-use crate::application::cp::CopyRequest;
-use crate::application::create::CreateRequest;
-use crate::application::del::DeleteRequest;
-use crate::application::fmt::FormatRequest;
-use crate::application::ls::ListRequest;
-use crate::application::mkdir::MakeDirectoryRequest;
-use crate::application::rename::RenameRequest;
-use crate::application::setattr::SetAttributesRequest;
+use crate::application::commands::cd::ChangeDirectoryRequest;
+use crate::application::commands::cp::CopyRequest;
+use crate::application::commands::create::CreateRequest;
+use crate::application::commands::del::DeleteRequest;
+use crate::application::commands::fmt::FormatRequest;
+use crate::application::commands::mkdir::MakeDirectoryRequest;
+use crate::application::commands::rename::RenameRequest;
+use crate::application::commands::setattr::SetAttributesRequest;
+use crate::application::queries::cat::CatRequest;
+use crate::application::queries::ls::ListRequest;
 use crate::application::Void;
 use crate::core::content_type::{ContentGenerator, ContentType};
 use crate::core::filter_type::FilterType;
@@ -88,47 +88,9 @@ impl IDiskManager for DiskManager {
             None,
         );
 
-        // create the cluster chain in fat and write the file data to the storage buffer
-        let mut current_cluster_index = first_cluster;
-        let mut remaining_file_size = request.size as u16;
+        // update fat and storage
         let mut file_data = ContentGenerator::generate(request.content_type, request.size);
-
-        while remaining_file_size > 0 {
-            match self.get_next_free_cluster_index_gt(current_cluster_index) {
-                Some(next_cluster_index) => {
-                    self.fat[current_cluster_index] = FatValue::Data(next_cluster_index as u16);
-
-                    self.storage_buffer[current_cluster_index] = file_data
-                        .drain(
-                            ..std::cmp::min(
-                                self.boot_sector.cluster_size as usize,
-                                remaining_file_size as usize,
-                            ),
-                        )
-                        .collect();
-
-                    if remaining_file_size > self.boot_sector.cluster_size {
-                        remaining_file_size -= self.boot_sector.cluster_size;
-                        current_cluster_index = next_cluster_index;
-                    } else {
-                        // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster_index]
-                            .resize(self.boot_sector.cluster_size as usize, 0);
-                        self.fat[current_cluster_index] = FatValue::EndOfChain;
-                        remaining_file_size = 0;
-                    }
-                }
-                None => {
-                    // mark the current cluster as end of chain and free the chain cluster and the file entry
-                    self.fat[current_cluster_index] = FatValue::EndOfChain;
-                    self.free_clusters(&file_entry);
-                    self.free_file_entry(&file_entry);
-                    self.sync_directory_root_table_to_storage(&self.working_directory.clone());
-
-                    return Err(Box::try_from("No space in fat".to_string()).unwrap());
-                }
-            }
-        }
+        self.write_data_to_disk(&file_entry, &mut file_data)?;
 
         // update the root table
         self.append_to_root_table_of_working_dir(file_entry.clone())?;
@@ -396,6 +358,8 @@ impl IDiskManager for DiskManager {
         self.free_clusters(&file_entry);
         self.free_file_entry(&file_entry);
 
+        // sync the working directory root table to storage iff the working directory is not root
+        // as by default the root table is synced to storage on every push
         if !self.working_directory.is_root() {
             self.sync_directory_root_table_to_storage(&self.working_directory.clone());
         }
@@ -438,10 +402,12 @@ impl IDiskManager for DiskManager {
         let mut current_cluster = file_entry.first_cluster as usize;
 
         while self.fat[current_cluster] != FatValue::EndOfChain {
+            // push the content of the current cluster to the content string
             content.push_str(&String::from_utf8_lossy(
                 &self.storage_buffer[current_cluster][..self.boot_sector.cluster_size as usize],
             ));
 
+            // get the next cluster index
             let next_cluster_index: u16 = self.fat[current_cluster].clone().into();
             current_cluster = next_cluster_index as usize;
         }
@@ -449,6 +415,10 @@ impl IDiskManager for DiskManager {
         // push the remaining content
         let mut remaining_content_size =
             file_entry.size as usize % self.boot_sector.cluster_size as usize;
+
+        // if the file size is a multiple of the cluster size, the last cluster is full
+        // and the remaining content size is 0 so we need to include the next cluster's content
+        // in the content string as well
         if file_entry.size != 0 && remaining_content_size == 0 {
             remaining_content_size += self.boot_sector.cluster_size as usize;
         }
@@ -547,21 +517,27 @@ impl IDiskManager for DiskManager {
                 let mut current_dest_cluster_index = dest_file_entry.first_cluster as usize;
 
                 while self.fat[current_src_cluster_index] != FatValue::EndOfChain {
+                    // copy the content of the current cluster in src to the current cluster in dest
                     self.storage_buffer[current_dest_cluster_index] =
                         self.storage_buffer[current_src_cluster_index].clone();
 
+                    // get the index of the next free cluster for dest
                     let next_dest_cluster_index: u16 = self
                         .get_next_free_cluster_index_gt(current_dest_cluster_index)
                         .unwrap() as u16;
 
+                    // mark the current dest cluster as used and point it to the next dest cluster
                     self.fat[current_dest_cluster_index] = FatValue::Data(next_dest_cluster_index);
                     current_dest_cluster_index = next_dest_cluster_index as usize;
 
+                    // advance to the next src cluster as well
                     let next_src_cluster_index: u16 =
                         self.fat[current_src_cluster_index].clone().into();
                     current_src_cluster_index = next_src_cluster_index as usize;
                 }
 
+                // copy the content of the last cluster in src to the last cluster in dest
+                // and mark the last dest cluster as end of chain
                 self.storage_buffer[current_dest_cluster_index] =
                     self.storage_buffer[current_src_cluster_index].clone();
                 self.fat[current_dest_cluster_index] = FatValue::EndOfChain;
@@ -577,6 +553,7 @@ impl IDiskManager for DiskManager {
                     Utc::now(),
                 );
                 self.make_directory(&make_directory_request)?;
+                // update the disk
                 self.push_sync();
 
                 // iterate over the src directory's root table and recreate the dir tree in the dest directory
@@ -617,6 +594,7 @@ impl IDiskManager for DiskManager {
             self.root[file_entry_index].apply_attributes(&request.attributes);
             self.root[file_entry_index].last_modification_datetime = Utc::now();
         } else {
+            // get the file entry
             let file_entry = self
                 .get_root_table_for_working_directory()
                 .iter_mut()
@@ -642,6 +620,8 @@ impl IDiskManager for DiskManager {
         let disk_size = boot_sector.cluster_size as u32 * boot_sector.cluster_count as u32;
 
         boot_sector.cluster_size = request.fat_type;
+        // the cluster count is the old disk size divided by the new cluster size
+        // as fmt should preserve the original disk size
         boot_sector.cluster_count = (disk_size / (boot_sector.cluster_size as u32)) as u16;
 
         let mut new_disk_manager = DiskManager::new(CONFIG_ARC.clone(), boot_sector);
@@ -754,6 +734,7 @@ impl IDiskManager for DiskManager {
             Some(Vec::new()),
         );
 
+        // create the self special dir entry
         let mut dot_dir_entry = dir_file_entry.clone();
         dot_dir_entry.name = ".".to_string();
         dot_dir_entry.attributes = FileEntryAttributes::combine(&[
@@ -762,6 +743,7 @@ impl IDiskManager for DiskManager {
             FileEntryAttributes::Hidden,
         ]);
 
+        // create the parent special dir entry
         let mut double_dot_dir_entry = self.working_directory.clone();
         double_dot_dir_entry.name = "..".to_string();
         double_dot_dir_entry.extension = "".to_string();
@@ -771,49 +753,12 @@ impl IDiskManager for DiskManager {
             FileEntryAttributes::Hidden,
         ]);
 
+        // attach the special dir entries to the directory file entry's children
         dir_file_entry.children_entries = Some(vec![dot_dir_entry, double_dot_dir_entry]);
 
-        // update the fat and the storage
-        let mut current_cluster_index = first_cluster_index as usize;
-        let mut remaining_file_size = dir_file_entry.size as u16;
-        let mut file_data = DiskManager::serialize_directory_root_table(&dir_file_entry);
-
-        while remaining_file_size > 0 {
-            match self.get_next_free_cluster_index_gt(current_cluster_index) {
-                Some(next_cluster_index) => {
-                    self.fat[current_cluster_index] = FatValue::Data(next_cluster_index as u16);
-
-                    self.storage_buffer[current_cluster_index] = file_data
-                        .drain(
-                            ..std::cmp::min(
-                                self.boot_sector.cluster_size as usize,
-                                remaining_file_size as usize,
-                            ),
-                        )
-                        .collect();
-
-                    if remaining_file_size > self.boot_sector.cluster_size {
-                        remaining_file_size -= self.boot_sector.cluster_size;
-                        current_cluster_index = next_cluster_index;
-                    } else {
-                        // add the remaining padding as 0 at the end of the cluster
-                        self.storage_buffer[current_cluster_index]
-                            .resize(self.boot_sector.cluster_size as usize, 0);
-                        self.fat[current_cluster_index] = FatValue::EndOfChain;
-                        remaining_file_size = 0;
-                    }
-                }
-                None => {
-                    // mark the current cluster as end of chain and free the chain cluster and the file entry
-                    self.fat[current_cluster_index] = FatValue::EndOfChain;
-                    self.free_clusters(&dir_file_entry);
-                    self.free_file_entry(&dir_file_entry);
-                    self.sync_directory_root_table_to_storage(&self.working_directory.clone());
-
-                    return Err(Box::try_from("No space in fat".to_string()).unwrap());
-                }
-            }
-        }
+        // update fat and storage
+        let mut dir_data = DiskManager::serialize_directory_root_table(&dir_file_entry);
+        self.write_data_to_disk(&dir_file_entry, &mut dir_data)?;
 
         // update the root table
         self.append_to_root_table_of_working_dir(dir_file_entry.clone())?;
@@ -838,15 +783,18 @@ impl IDiskManager for DiskManager {
             .unwrap());
         }
 
+        // cd to root
         if request.directory_name == "/" {
             self.change_working_directory_to_root()?;
             return Ok(());
         }
 
+        // cd to self
         if request.directory_name == "." {
             return Ok(());
         }
 
+        // cd to parent
         if request.directory_name == ".." {
             let parent = self.working_directory.parent_entry.clone().unwrap();
             self.working_directory = *parent;
@@ -870,16 +818,22 @@ impl IDiskManager for DiskManager {
         dirs.push(&self.working_directory.name);
 
         let mut current_dir = &self.working_directory;
+        // iterate over the parent entries until we reach the root
+        // and push the directory names to the dirs vector
         while let Some(parent_dir) = current_dir.parent_entry.as_ref() {
             current_dir = parent_dir;
             dirs.push(&current_dir.name);
         }
 
-        if self.working_directory.parent_entry.is_some() {
+        // if current_dir is root, then we need to add an empty string to the dirs vector
+        // and remove the last element (which is the root dir)
+        // in order to get rid of the trailing slash
+        if !self.working_directory.is_root() {
             dirs.pop();
             dirs.push("");
         }
 
+        // reverse the dirs vector and join the elements with a slash
         dirs.reverse();
         dirs.join("/")
     }
@@ -889,8 +843,10 @@ impl IDiskManager for DiskManager {
     }
 
     fn get_free_space(&mut self) -> u64 {
+        // update the in-memory disk representation
         self.pull_sync();
 
+        // count the free clusters and multiply them by the cluster size to get the free space
         let free_clusters = self
             .fat
             .iter()

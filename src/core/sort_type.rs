@@ -1,3 +1,10 @@
+/// SortType is used to sort the files and folders fpr the output of the ls command:
+/// - `NameAsc`: sort by name ascending
+/// - `NameDesc`: sort by name descending
+/// - `DateAsc`: sort by date ascending
+/// - `DateDesc`: sort by date descending
+/// - `SizeAsc`: sort by size ascending
+/// - `SizeDesc`: sort by size descending
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum SortType {
     NameAsc,

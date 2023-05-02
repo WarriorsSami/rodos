@@ -6,6 +6,14 @@ use chrono::{DateTime, Utc};
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// CreateRequest is a request to create a file
+/// # Fields
+/// * `name` - the name of the file
+/// * `extension` - the extension of the file
+/// * `size` - the size of the file
+/// * `attributes` - the attributes of the file
+/// * `last_modification_datetime` - the last modification datetime of the file
+/// * `content_type` - the content type of the file
 pub(crate) struct CreateRequest {
     pub(crate) name: String,
     pub(crate) extension: String,

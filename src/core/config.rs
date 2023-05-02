@@ -1,6 +1,16 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+/// The configuration of the shell:
+/// - `os`: The name of the operating system.
+/// - `version`: The version of the operating system.
+/// - `author`: The author of the shell.
+/// - `prompt`: The prompt of the shell.
+/// - `commands`: The list of available commands.
+/// - `disk_dir_path`: The path to the directory where the storage file is located.
+/// - `storage_file_path`: The path to the storage file.
+/// - `stdin_file_path`: The path to the stdin file.
+/// - `temp_file_path`: The path to the temp buffer file.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Config {
     pub(crate) os: String,
@@ -194,6 +204,12 @@ impl Default for Config {
     }
 }
 
+/// The prompt configuration:
+/// - `host`: the host name
+/// - `separator`: the separator between the user and the host
+/// - `user`: the user name
+/// - `path_prefix`: the prefix of the path
+/// - `terminator`: the terminator of the prompt
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Prompt {
     pub(crate) host: String,
@@ -215,6 +231,11 @@ impl Default for Prompt {
     }
 }
 
+/// A command configuration:
+/// - `name`: the name of the command
+/// - `description`: the description of the command
+/// - `usage`: the usage of the command
+/// - `regex`: the regex used to parse the command
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Command {
     pub(crate) name: String,
@@ -223,4 +244,5 @@ pub(crate) struct Command {
     pub(crate) regex: String,
 }
 
+/// A hashmap of commands
 pub(crate) type Commands = HashMap<String, Command>;

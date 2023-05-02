@@ -5,6 +5,9 @@ use crate::{info, success, warn};
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// HelpRequest is a request to show help instructions for a command or all commands
+/// # Fields
+/// * `command` - the command to show help instructions for
 pub(crate) struct HelpRequest {
     pub(crate) command: Option<String>,
 }
@@ -17,6 +20,7 @@ impl HelpRequest {
 
 impl Request<Void> for HelpRequest {}
 
+/// HelpHandler is a handler for HelpRequest holding a reference to the config
 pub(crate) struct HelpHandler {
     config: Arm<Config>,
 }

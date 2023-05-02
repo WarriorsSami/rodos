@@ -4,6 +4,9 @@ use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// Request to change the working directory
+/// # Fields
+/// * `directory_name` - The name of the directory to change to
 pub(crate) struct ChangeDirectoryRequest {
     pub(crate) directory_name: String,
 }
@@ -16,6 +19,7 @@ impl ChangeDirectoryRequest {
 
 impl Request<Void> for ChangeDirectoryRequest {}
 
+/// Handler for ChangeDirectoryRequest holding a reference to the disk manager
 pub(crate) struct ChangeDirectoryHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

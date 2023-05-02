@@ -1,17 +1,17 @@
-use crate::application::cat::CatHandler;
-use crate::application::cd::ChangeDirectoryHandler;
-use crate::application::cp::CopyHandler;
-use crate::application::create::CreateHandler;
-use crate::application::defrag::DefragmentHandler;
-use crate::application::del::DeleteHandler;
-use crate::application::fmt::FormatHandler;
-use crate::application::help::HelpHandler;
-use crate::application::ls::ListHandler;
-use crate::application::mkdir::MakeDirectoryHandler;
-use crate::application::neofetch::NeofetchHandler;
-use crate::application::pwd::PwdHandler;
-use crate::application::rename::RenameHandler;
-use crate::application::setattr::SetAttributesHandler;
+use crate::application::commands::cd::ChangeDirectoryHandler;
+use crate::application::commands::cp::CopyHandler;
+use crate::application::commands::create::CreateHandler;
+use crate::application::commands::defrag::DefragmentHandler;
+use crate::application::commands::del::DeleteHandler;
+use crate::application::commands::fmt::FormatHandler;
+use crate::application::commands::mkdir::MakeDirectoryHandler;
+use crate::application::commands::rename::RenameHandler;
+use crate::application::commands::setattr::SetAttributesHandler;
+use crate::application::queries::cat::CatHandler;
+use crate::application::queries::help::HelpHandler;
+use crate::application::queries::ls::ListHandler;
+use crate::application::queries::neofetch::NeofetchHandler;
+use crate::application::queries::pwd::PwdHandler;
 use crate::core::cli_parser::CliParser;
 use crate::core::config::Config;
 use crate::core::Arm;
@@ -34,6 +34,7 @@ mod infrastructure;
 
 // config
 lazy_static! {
+    /// Config is a singleton that holds the configuration for the entire application
     pub(crate) static ref CONFIG: Config = {
         let config_res = std::fs::read_to_string("config/config.toml");
 
@@ -60,6 +61,7 @@ lazy_static! {
         config
     };
     pub(crate) static ref CONFIG_ARC: Arm<Config> = Arc::new(Mutex::new(CONFIG.clone()));
+    /// Disk manager singleton wrapped in an Arc<Mutex<>> to allow for concurrent access (not currently used)
     pub(crate) static ref DISK_ARC: Arm<dyn IDiskManager> = {
         let mut disk_manager = DiskManager::new(CONFIG_ARC.clone(), BootSector::default());
 
@@ -89,6 +91,7 @@ lazy_static! {
 
         Arc::new(Mutex::new(disk_manager))
     };
+    /// The mediator is responsible for redirecting commands to the appropriate handlers
     pub(crate) static ref MEDIATOR: DefaultMediator = DefaultMediator::builder()
         .add_handler(HelpHandler::new(CONFIG_ARC.clone()))
         .add_handler(NeofetchHandler::new(CONFIG_ARC.clone(), DISK_ARC.clone()))
@@ -115,6 +118,7 @@ fn main() {
     loop {
         prompt!();
 
+        // read input from stdin
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
             Ok(read_bytes) => {
@@ -127,6 +131,7 @@ fn main() {
                 continue;
             }
         }
+        // get the first word of the input - this is the command
         let command = input.split_whitespace().next();
 
         if command.is_none() {
@@ -134,6 +139,7 @@ fn main() {
             continue;
         }
 
+        // match the command to the appropriate handler
         match command.unwrap() {
             "neofetch" => handle!(mediator, parse_neofetch, input.as_str()),
             "create" => handle!(

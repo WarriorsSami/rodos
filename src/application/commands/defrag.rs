@@ -3,6 +3,7 @@ use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
+/// DefragmentRequest is a request to defragment the disk
 pub(crate) struct DefragmentRequest;
 
 impl DefragmentRequest {
@@ -13,6 +14,7 @@ impl DefragmentRequest {
 
 impl Request<Void> for DefragmentRequest {}
 
+/// DefragmentHandler is a handler for DefragmentRequest holding a reference to the disk manager
 pub(crate) struct DefragmentHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

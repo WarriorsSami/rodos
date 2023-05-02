@@ -6,6 +6,10 @@ use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// ListRequest is a request to list files in the current directory
+/// # Fields
+/// * `filters` - a vector of filters to apply to the list
+/// * `sort` - an optional sort flag to apply to the list
 pub(crate) struct ListRequest {
     pub(crate) filters: Vec<FilterType>,
     pub(crate) sort: Option<SortType>,
@@ -19,6 +23,7 @@ impl ListRequest {
 
 impl Request<Void> for ListRequest {}
 
+/// ListHandler is a handler for ListRequest holding a reference to a disk manager
 pub(crate) struct ListHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }
@@ -45,6 +50,7 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                             file_entries.len()
                         );
 
+                        // if in short format, print only file names and extensions
                         if request.filters.contains(&FilterType::InShortFormat) {
                             file_entries
                                 .iter()
@@ -55,6 +61,7 @@ impl RequestHandler<ListRequest, Void> for ListHandler {
                                     false => println!("{}", file_entry.name),
                                 });
                         } else {
+                            // otherwise, print all file entry info
                             file_entries.iter().for_each(|file_entry| {
                                 println!("{}", file_entry);
                             });

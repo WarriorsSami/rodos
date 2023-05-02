@@ -3,6 +3,12 @@ use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
+/// CopyRequest is a request to copy a file from one location to another
+/// # Fields
+/// * `src_name` - The name of the file to copy
+/// * `src_extension` - The extension of the file to copy
+/// * `dest_name` - The name of the destination file
+/// * `dest_extension` - The extension of the destination file
 pub(crate) struct CopyRequest {
     pub(crate) src_name: String,
     pub(crate) src_extension: String,
@@ -28,6 +34,7 @@ impl CopyRequest {
 
 impl Request<Void> for CopyRequest {}
 
+/// CopyHandler is a handler for CopyRequest holding a reference to the disk manager
 pub(crate) struct CopyHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

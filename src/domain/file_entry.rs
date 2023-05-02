@@ -1,9 +1,13 @@
-use crate::infrastructure::disk_manager::ByteArray;
+use crate::infrastructure::ByteArray;
 use chrono::{DateTime, Datelike, LocalResult, TimeZone, Timelike, Utc};
 use std::fmt::Display;
 use std::ops::BitOr;
 use std::str::FromStr;
 
+/// An enum representing the bit position as a bitmask for each type of file entry attribute:
+/// - `Mode` (read-only or read-write): `bit 0`
+/// - `Visibility` (hidden or visible): `bit 1`
+/// - `Type` (file or directory): `bit 2`
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FileEntryAttributesFlags {
     Mode = 0x01,
@@ -11,6 +15,13 @@ pub(crate) enum FileEntryAttributesFlags {
     Type = 0x04,
 }
 
+/// An enum representing the value of each type of file entry attribute:
+/// - `ReadOnly`: `set bit`
+/// - `ReadWrite`: `unset bit`
+/// - `Hidden`: `set bit`
+/// - `Visible`: `unset bit`
+/// - `File`: `set bit`
+/// - `Directory`: `unset bit`
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FileEntryAttributes {
     /// Read-only file: `set bit`
@@ -28,6 +39,7 @@ pub(crate) enum FileEntryAttributes {
 }
 
 impl FileEntryAttributes {
+    /// Combines multiple `FileEntryAttributes` into a single `u8` value using the `BitOr` operator.
     pub(crate) fn combine(attributes: &[FileEntryAttributes]) -> u8 {
         attributes.iter().fold(0, |acc, x| {
             let x: u8 = (*x).into();
@@ -36,6 +48,7 @@ impl FileEntryAttributes {
     }
 }
 
+/// Serializes a `FileEntryAttributes` into a `u8` value.
 impl Into<u8> for FileEntryAttributes {
     fn into(self) -> u8 {
         match self {
@@ -49,6 +62,7 @@ impl Into<u8> for FileEntryAttributes {
     }
 }
 
+/// Performs a bitwise OR operation between two `FileEntryAttributes` values.
 impl BitOr for FileEntryAttributes {
     type Output = u8;
 
@@ -60,6 +74,11 @@ impl BitOr for FileEntryAttributes {
     }
 }
 
+/// Maps a `FileEntryAttributes` to the corresponding string flag:
+/// - `ReadOnly`: `-w`
+/// - `ReadWrite`: `+w`
+/// - `Hidden`: `+h`
+/// - `Visible`: `-h`
 impl FromStr for FileEntryAttributes {
     type Err = String;
 
@@ -74,6 +93,15 @@ impl FromStr for FileEntryAttributes {
     }
 }
 
+/// A file entry struct containing the necessary metadata to represent a file or directory:
+/// - `name`: the name of the file or directory (8 bytes)
+/// - `extension`: the extension of the file or directory (3 bytes)
+/// - `size`: the size of the file or directory in bytes (4 bytes)
+/// - `first_cluster`: the index of the allocation chain's head of the file or directory (2 bytes)
+/// - `attributes`: the attributes of the file or directory (1 byte)
+/// - `last_modification_datetime`: the last modification date and time of the file or directory (4 bytes)
+/// - `parent_entry`: the parent directory of the file or directory (none if root)
+/// - `children_entries`: the children files or directories of the file or directory (none if file)
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FileEntry {
     pub(crate) name: String,
@@ -126,6 +154,7 @@ impl FileEntry {
         self.name == "/"
     }
 
+    /// Applies the given attributes against the current attributes of the file entry.
     pub(crate) fn apply_attributes(&mut self, attributes: &Vec<FileEntryAttributes>) {
         for attribute in attributes {
             match attribute {
@@ -243,6 +272,7 @@ impl Display for FileEntry {
     }
 }
 
+/// Deserializes a byte array into a file entry.
 impl From<ByteArray> for FileEntry {
     fn from(value: ByteArray) -> Self {
         let mut name = String::new();
@@ -287,6 +317,7 @@ impl From<ByteArray> for FileEntry {
     }
 }
 
+/// Serializes a file entry into a byte array.
 impl Into<ByteArray> for FileEntry {
     fn into(self) -> ByteArray {
         let mut result = Vec::new();
@@ -334,4 +365,5 @@ impl Into<ByteArray> for FileEntry {
     }
 }
 
+/// A root table is a list of file entries.
 pub(crate) type RootTable = Vec<FileEntry>;

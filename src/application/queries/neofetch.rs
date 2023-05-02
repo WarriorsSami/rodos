@@ -5,7 +5,7 @@ use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
-// NeofetchEvent is a request for retrieving specifications about the OS.
+// NeofetchRequest is a request for retrieving specifications about the OS.
 pub(crate) struct NeofetchRequest;
 
 impl NeofetchRequest {
@@ -16,7 +16,7 @@ impl NeofetchRequest {
 
 impl Request<Void> for NeofetchRequest {}
 
-// NeofetchHandler is a handler for NeofetchRequest.
+// NeofetchHandler is a handler for NeofetchRequest holding references to the config and disk manager.
 pub(crate) struct NeofetchHandler {
     config: Arm<Config>,
     disk_manager: Arm<dyn IDiskManager>,

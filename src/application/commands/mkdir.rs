@@ -4,6 +4,11 @@ use crate::domain::i_disk_manager::IDiskManager;
 use chrono::{DateTime, Utc};
 use mediator::{Request, RequestHandler};
 
+/// MakeDirectoryRequest is a request to make a directory
+/// # Fields
+/// * `name` - the name of the directory to make
+/// * `attributes` - the attributes of the directory to make
+/// * `last_modification_datetime` - the last modification datetime of the directory to make
 pub(crate) struct MakeDirectoryRequest {
     pub(crate) name: String,
     pub(crate) attributes: u8,
@@ -26,6 +31,7 @@ impl MakeDirectoryRequest {
 
 impl Request<Void> for MakeDirectoryRequest {}
 
+/// MakeDirectoryHandler is a handler that handles MakeDirectoryRequests holding a reference to a disk manager
 pub(crate) struct MakeDirectoryHandler {
     pub(crate) disk_manager: Arm<dyn IDiskManager>,
 }

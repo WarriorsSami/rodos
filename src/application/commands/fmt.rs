@@ -3,6 +3,9 @@ use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
+/// FormatRequest is a request to format the disk
+/// # Fields
+/// * `fat_type` - the FAT type to format the disk with
 pub(crate) struct FormatRequest {
     pub(crate) fat_type: u16,
 }
@@ -15,6 +18,7 @@ impl FormatRequest {
 
 impl Request<Void> for FormatRequest {}
 
+/// FormatHandler is a handler for FormatRequest holding a reference to the disk manager
 pub(crate) struct FormatHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

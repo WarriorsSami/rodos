@@ -4,6 +4,10 @@ use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// DeleteRequest is a request to delete a file or directory
+/// # Fields
+/// * `file_name` - the name of the file or directory to delete
+/// * `file_extension` - the extension of the file to delete
 pub(crate) struct DeleteRequest {
     pub(crate) file_name: String,
     pub(crate) file_extension: String,
@@ -20,6 +24,7 @@ impl DeleteRequest {
 
 impl Request<Void> for DeleteRequest {}
 
+/// DeleteHandler is a handler for DeleteRequest holding a reference to the disk manager
 pub(crate) struct DeleteHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

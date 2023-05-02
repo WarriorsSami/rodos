@@ -1,3 +1,12 @@
+/// FilterType is used to filter the output of the ls command:
+/// - `Name`: filter by name
+/// - `Extension`: filter by extension
+/// - `Files`: show only files
+/// - `Directories`: show only directories
+/// - `InShortFormat`: show in short format (just the name and extension)
+/// - `InLongFormat`: show in long format (name, extension, size, date, etc.)
+/// - `AllAndHidden`: show all files and hidden files
+/// - `All`: show all files
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum FilterType {
     Name(String),

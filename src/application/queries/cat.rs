@@ -4,6 +4,10 @@ use crate::domain::i_disk_manager::IDiskManager;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// CatRequest is a request to show the content of a file
+/// # Fields
+/// * `file_name` - The name of the file to show
+/// * `file_extension` - The extension of the file to show
 pub(crate) struct CatRequest {
     pub(crate) file_name: String,
     pub(crate) file_extension: String,
@@ -20,6 +24,7 @@ impl CatRequest {
 
 impl Request<Void> for CatRequest {}
 
+/// CatHandler is a handler for CatRequest holding a reference to the disk manager
 pub(crate) struct CatHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

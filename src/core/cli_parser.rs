@@ -1,17 +1,17 @@
-use crate::application::cat::CatRequest;
-use crate::application::cd::ChangeDirectoryRequest;
-use crate::application::cp::CopyRequest;
-use crate::application::create::CreateRequest;
-use crate::application::defrag::DefragmentRequest;
-use crate::application::del::DeleteRequest;
-use crate::application::fmt::FormatRequest;
-use crate::application::help::HelpRequest;
-use crate::application::ls::ListRequest;
-use crate::application::mkdir::MakeDirectoryRequest;
-use crate::application::neofetch::NeofetchRequest;
-use crate::application::pwd::PwdRequest;
-use crate::application::rename::RenameRequest;
-use crate::application::setattr::SetAttributesRequest;
+use crate::application::commands::cd::ChangeDirectoryRequest;
+use crate::application::commands::cp::CopyRequest;
+use crate::application::commands::create::CreateRequest;
+use crate::application::commands::defrag::DefragmentRequest;
+use crate::application::commands::del::DeleteRequest;
+use crate::application::commands::fmt::FormatRequest;
+use crate::application::commands::mkdir::MakeDirectoryRequest;
+use crate::application::commands::rename::RenameRequest;
+use crate::application::commands::setattr::SetAttributesRequest;
+use crate::application::queries::cat::CatRequest;
+use crate::application::queries::help::HelpRequest;
+use crate::application::queries::ls::ListRequest;
+use crate::application::queries::neofetch::NeofetchRequest;
+use crate::application::queries::pwd::PwdRequest;
 use crate::application::Void;
 use crate::core::content_type::ContentType;
 use crate::core::filter_type::FilterType;
@@ -22,6 +22,8 @@ use chrono::Utc;
 use color_print::cprintln;
 use std::error::Error;
 
+/// CliParser is used to parse the input from the user based on the regex patterns defined in the
+/// config file.
 pub(crate) struct CliParser;
 
 impl CliParser {
@@ -150,6 +152,8 @@ impl CliParser {
 
             let mut filters: Vec<FilterType> = Vec::new();
 
+            // parse the basic filters if any (all from FilterType excepting Name and Extension)
+            // from string and extract a vector of those
             if let Some(filter_basic) = filter_basic {
                 let filter_basic = filter_basic.as_str();
                 filters.append(
@@ -161,11 +165,13 @@ impl CliParser {
                 );
             }
 
+            // parse the file name filter and add it to the vector if present
             if let Some(filter_name) = filter_name {
                 let filter_name = filter_name.as_str();
                 filters.push(FilterType::Name(filter_name.to_string()));
             }
 
+            // parse the file extension filter and add it to the vector if present
             if let Some(filter_extension) = filter_extension {
                 let filter_extension = filter_extension.as_str();
                 filters.push(FilterType::Extension(filter_extension.to_string()));
@@ -173,6 +179,7 @@ impl CliParser {
 
             let mut sort_option: Option<SortType> = None;
 
+            // parse the sort option if present
             if let Some(sort) = sort {
                 let sort = sort.as_str();
                 sort_option = Some(SortType::from(sort));
@@ -201,6 +208,7 @@ impl CliParser {
             let new_extension = captures.name("new_extension");
 
             match (old_extension, new_extension) {
+                // when both extensions are present, rename a file
                 (Some(old_extension), Some(new_extension)) => {
                     let old_extension = old_extension.as_str();
                     let new_extension = new_extension.as_str();
@@ -237,6 +245,7 @@ impl CliParser {
                         new_extension.to_string(),
                     ))
                 }
+                // when none of the extensions are present, rename a folder
                 (None, None) => {
                     if old_name.len() > 8 {
                         return Err(
@@ -258,6 +267,7 @@ impl CliParser {
                         "".to_string(),
                     ))
                 }
+                // else, return an error
                 _ => Err(Box::try_from("Cannot rename a folder as a file or vice versa!").unwrap()),
             }
         } else {
@@ -337,6 +347,7 @@ impl CliParser {
             let dest_extension = captures.name("dest_extension");
 
             match (src_extension, dest_extension) {
+                // when both extensions are present, copy a file
                 (Some(src_extension), Some(dest_extension)) => {
                     let src_extension = src_extension.as_str();
                     let dest_extension = dest_extension.as_str();
@@ -376,6 +387,7 @@ impl CliParser {
                         dest_extension.to_string(),
                     ))
                 }
+                // when both extensions are missing, copy a directory
                 (None, None) => {
                     if src_name.len() > 8 {
                         return Err(
@@ -398,6 +410,7 @@ impl CliParser {
                         "".to_string(),
                     ))
                 }
+                // otherwise, the command is invalid
                 _ => {
                     info!("Usage: {}", usage);
                     Err(
@@ -465,6 +478,9 @@ impl CliParser {
                 None => "",
             };
 
+            // split attributes into chunks of 2 characters
+            // then parse each chunk into a FileEntryAttributes
+            // and collect them into a vector
             let attributes = attributes
                 .chars()
                 .collect::<Vec<_>>()

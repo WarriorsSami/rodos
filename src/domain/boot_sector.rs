@@ -1,5 +1,17 @@
-use crate::infrastructure::disk_manager::ByteArray;
+use crate::infrastructure::ByteArray;
 
+/// The `boot sector` of the disk is a special reserved sector that contains
+/// configuration information about the disk which is required when initializing the disk or formatting it.
+///
+/// It is usually located in the first cluster of the disk.
+///
+/// # Structure
+/// - cluster_size: 2 bytes (bytes per cluster)
+/// - cluster_count: 2 bytes (total number of clusters)
+/// - root_entry_cell_size: 2 bytes (size of a file entry cell in bytes)
+/// - root_entry_count: 2 bytes (total number of file entries in the root directory)
+/// - fat_cell_size: 2 bytes (size of a FAT cell in bytes)
+/// - clusters_per_boot_sector: 2 bytes (number of cluster occupied by the boot sector)
 #[derive(Debug, Clone)]
 pub(crate) struct BootSector {
     pub(crate) cluster_size: u16,
@@ -10,6 +22,7 @@ pub(crate) struct BootSector {
     pub(crate) clusters_per_boot_sector: u16,
 }
 
+/// Default values for a `BootSector`.
 impl Default for BootSector {
     fn default() -> Self {
         Self {
@@ -23,6 +36,7 @@ impl Default for BootSector {
     }
 }
 
+/// Deserializes a `ByteArray` into a `BootSector`.
 impl From<ByteArray> for BootSector {
     fn from(value: ByteArray) -> Self {
         // cluster_size
@@ -54,6 +68,7 @@ impl From<ByteArray> for BootSector {
     }
 }
 
+/// Serializes a `BootSector` into a `ByteArray`.
 impl Into<ByteArray> for BootSector {
     fn into(self) -> ByteArray {
         let mut result = Vec::new();

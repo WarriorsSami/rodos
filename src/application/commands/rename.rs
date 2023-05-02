@@ -3,6 +3,12 @@ use crate::core::Arm;
 use crate::domain::i_disk_manager::IDiskManager;
 use mediator::{Request, RequestHandler};
 
+/// RenameRequest is a request to rename a file
+/// # Fields
+/// * `old_name` - the old name of the file
+/// * `old_extension` - the old extension of the file (empty if directory)
+/// * `new_name` - the new name of the file
+/// * `new_extension` - the new extension of the file (empty if directory)
 #[derive(Debug, Clone)]
 pub(crate) struct RenameRequest {
     pub(crate) old_name: String,
@@ -29,6 +35,7 @@ impl RenameRequest {
 
 impl Request<Void> for RenameRequest {}
 
+/// RenameHandler is a handler for RenameRequest holding a reference to the disk manager
 pub(crate) struct RenameHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }

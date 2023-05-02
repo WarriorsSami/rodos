@@ -5,6 +5,7 @@ use crate::info;
 use color_print::cprintln;
 use mediator::{Request, RequestHandler};
 
+/// PwdRequest is a request to show the current directory
 pub(crate) struct PwdRequest;
 
 impl PwdRequest {
@@ -15,6 +16,7 @@ impl PwdRequest {
 
 impl Request<Void> for PwdRequest {}
 
+/// PwdHandler is a handler for PwdRequest holding a reference to the disk manager
 pub(crate) struct PwdHandler {
     disk_manager: Arm<dyn IDiskManager>,
 }
