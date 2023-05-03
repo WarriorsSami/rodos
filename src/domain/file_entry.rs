@@ -100,6 +100,13 @@ impl FromStr for FileEntryAttributes {
 /// - `first_cluster`: the index of the allocation chain's head of the file or directory (2 bytes)
 /// - `attributes`: the attributes of the file or directory (1 byte)
 /// - `last_modification_datetime`: the last modification date and time of the file or directory (4 bytes)
+/// where:
+///     - `year`: 7 bits (0-127) since 1980
+///     - `month`: 4 bits (1-12)
+///     - `day`: 5 bits (1-31)
+///     - `hour`: 5 bits (0-23)
+///     - `minute`: 6 bits (0-59)
+///     - `second`: 5 bits (0-59)
 /// - `parent_entry`: the parent directory of the file or directory (none if root)
 /// - `children_entries`: the children files or directories of the file or directory (none if file)
 #[derive(Debug, Clone, Default)]
