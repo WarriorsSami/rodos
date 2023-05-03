@@ -638,10 +638,7 @@ impl IDiskManager for DiskManager {
             DiskManager::new(CONFIG_ARC.clone(), self.get_boot_sector().clone());
 
         // change the working directory to be the root
-        while !self.working_directory.is_root() {
-            let cd_request = ChangeDirectoryRequest::new("..".to_string());
-            self.change_working_directory(&cd_request)?;
-        }
+        self.change_working_directory_to_root()?;
 
         // iterate over the root file entries
         for file_entry in self.root.clone().iter() {
